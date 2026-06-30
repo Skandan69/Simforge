@@ -13,6 +13,7 @@
     "build": "npm run db:generate && npm run build --workspace @simforge/shared && npm run build --workspace @simforge/api && npm run build --workspace @simforge/web",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
     "db:generate": "prisma generate",
     "db:validate": "prisma validate",
     "db:migrate": "prisma migrate dev"

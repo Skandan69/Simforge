@@ -25,4 +25,12 @@ Supabase PostgreSQL provides persistence. Application traffic uses the pooled co
 
 ## Intentional omissions
 
-Knowledge Studio, Simulation Studio, assessment workflows, invitations, queues, caching, observability vendors, and deployment providers are deliberately deferred until requirements justify them.
+Simulation Studio, assessment workflows, invitations, queues, caching, observability vendors, and deployment providers are deliberately deferred until requirements justify them.
+
+## Knowledge Studio foundation
+
+Knowledge Studio stores governed metadata in PostgreSQL and original files in a private Supabase Storage bucket. The hierarchy is Organization → Knowledge Base → Document → Document Version. Owner, Admin, and Trainer roles can mutate knowledge content; Manager and Learner roles are read-only in both the API and Storage policies.
+
+Uploads travel directly from the authenticated browser to Supabase Storage so the UI can report byte-level progress. The Express API validates the organization-scoped storage path and persists metadata only after Storage accepts the file. Deletion is coordinated by the API with a server-only service-role key so database rows and every stored version are removed together.
+
+No document contents are parsed. Search uses PostgreSQL metadata fields only, and the schema intentionally has no embeddings, chunks, AI indexes, prompts, or conversations.

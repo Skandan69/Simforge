@@ -22,7 +22,7 @@ dashboardRouter.get("/", requireAuth, async (request, response) => {
     return;
   }
 
-  const [users, activities]: [number, Array<{
+  const [users, knowledgeBases, activities]: [number, number, Array<{
     id: string;
     action: string;
     description: string;
@@ -30,6 +30,7 @@ dashboardRouter.get("/", requireAuth, async (request, response) => {
     actor: { fullName: string | null; email: string } | null;
   }>] = await Promise.all([
     prisma.membership.count({ where: { organizationId: membership.organizationId } }),
+    prisma.knowledgeBase.count({ where: { organizationId: membership.organizationId, status: "Active" } }),
     prisma.activity.findMany({
       where: { organizationId: membership.organizationId },
       take: 8,
@@ -43,7 +44,7 @@ dashboardRouter.get("/", requireAuth, async (request, response) => {
     role: membership.role,
     kpis: {
       users,
-      knowledgeBases: 0,
+      knowledgeBases,
       simulations: 0,
       assessments: 0,
     },

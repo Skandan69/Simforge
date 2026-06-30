@@ -1,8 +1,8 @@
 # SimForge
 
-SimForge is an enterprise simulation-training platform foundation built as a TypeScript monorepo. Sprint 1 includes Supabase email/password authentication, protected routes, organization onboarding, role-aware persistence, and a responsive enterprise dashboard.
+SimForge is an enterprise simulation-training platform foundation built as a TypeScript monorepo. It includes Supabase authentication, organization workspaces, role-aware access, and Knowledge Studio for governed document storage and metadata management.
 
-Knowledge Studio and Simulation Studio are navigation placeholders only; product functionality has not started.
+Simulation Studio remains a navigation placeholder. Knowledge Studio stores source files and metadata only; no AI, embeddings, RAG, indexing, summaries, or document processing exists.
 
 ## Repository structure
 
@@ -48,7 +48,7 @@ docs/           Product and architecture notes
    npm run db:migrate
    ```
 
-5. Run [`database/supabase/storage.sql`](database/supabase/storage.sql) in the Supabase SQL editor. This creates the organization-logo bucket and its upload policy.
+5. Run [`database/supabase/storage.sql`](database/supabase/storage.sql) and [`database/supabase/knowledge-storage.sql`](database/supabase/knowledge-storage.sql) in the Supabase SQL editor. These configure organization logos and the private, role-protected knowledge-document bucket.
 
 6. In Supabase Authentication URL Configuration, add these local redirect URLs:
 
@@ -86,3 +86,9 @@ The web app runs at `http://localhost:3000`, the API at `http://localhost:4000`,
 Registration uses Supabase’s email-confirmation flow. After the first successful login, SimForge creates the user profile lazily and routes the user to organization setup. Organization creation assigns the creator the `Owner` role. The remaining supported roles are `Admin`, `Trainer`, `Manager`, and `Learner`.
 
 All workspace pages are protected in Next.js, and the API independently validates the Supabase access token before returning organization data.
+
+## Knowledge Studio
+
+Knowledge Studio supports multiple departmental knowledge bases, PDF/DOCX/PPTX/XLSX uploads up to 50 MB, real upload progress, notes, version replacement, private downloads, archiving, deletion, and metadata search. Owner, Admin, and Trainer can make changes. Manager and Learner are read-only.
+
+Add `SUPABASE_SERVICE_ROLE_KEY` only to the API environment. It is used for trusted Storage cleanup and must never be exposed through a `NEXT_PUBLIC_` variable.

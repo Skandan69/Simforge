@@ -5,7 +5,11 @@ import helmet from "helmet";
 import { ZodError } from "zod";
 import { API_SERVICE_NAME } from "@simforge/shared";
 import { getEnv } from "./config/env.js";
+import { HttpError } from "./lib/http-error.js";
 import { dashboardRouter } from "./routes/dashboard.js";
+import { documentsRouter } from "./routes/documents.js";
+import { knowledgeBasesRouter } from "./routes/knowledge-bases.js";
+import { knowledgeSearchRouter } from "./routes/knowledge-search.js";
 import { meRouter } from "./routes/me.js";
 import { organizationsRouter } from "./routes/organizations.js";
 
@@ -36,6 +40,9 @@ app.get("/health", (_request, response) => {
 app.use("/api/me", meRouter);
 app.use("/api/organizations", organizationsRouter);
 app.use("/api/dashboard", dashboardRouter);
+app.use("/api/knowledge-bases", knowledgeBasesRouter);
+app.use("/api/documents", documentsRouter);
+app.use("/api/knowledge-search", knowledgeSearchRouter);
 
 app.use((_request, response) => {
   response.status(404).json({ error: "Route not found" });
@@ -44,6 +51,11 @@ app.use((_request, response) => {
 app.use((error: unknown, _request: express.Request, response: express.Response, _next: express.NextFunction) => {
   if (error instanceof ZodError) {
     response.status(400).json({ error: "Invalid request", details: error.flatten().fieldErrors });
+    return;
+  }
+
+  if (error instanceof HttpError) {
+    response.status(error.status).json({ error: error.message, code: error.code });
     return;
   }
 

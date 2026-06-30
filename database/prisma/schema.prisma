@@ -15,35 +15,119 @@ enum UserRole {
   Learner
 }
 
+enum KnowledgeBaseStatus {
+  Active
+  Archived
+}
+
+enum DocumentFileType {
+  PDF
+  DOCX
+  PPTX
+  XLSX
+}
+
+enum DocumentStatus {
+  Ready
+  Archived
+  Failed
+}
+
 model Profile {
-  id                   String         @id @db.Uuid
-  email                String         @unique
-  fullName             String?
-  avatarUrl            String?
-  createdAt            DateTime       @default(now())
-  updatedAt            DateTime       @updatedAt
-  memberships          Membership[]
-  createdOrganizations Organization[] @relation("OrganizationCreator")
-  activities           Activity[]
+  id                    String            @id @db.Uuid
+  email                 String            @unique
+  fullName              String?
+  avatarUrl             String?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  memberships           Membership[]
+  createdOrganizations  Organization[]    @relation("OrganizationCreator")
+  activities            Activity[]
+  knowledgeBasesCreated KnowledgeBase[]   @relation("KnowledgeBaseCreator")
+  documentsUploaded     Document[]        @relation("DocumentUploader")
+  versionsUploaded      DocumentVersion[] @relation("DocumentVersionUploader")
 }
 
 model Organization {
-  id          String       @id @default(uuid()) @db.Uuid
-  name        String
-  slug        String       @unique
-  industry    String
-  companySize String
-  country     String
-  timezone    String
-  logoUrl     String?
-  createdBy   String       @db.Uuid
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  creator     Profile      @relation("OrganizationCreator", fields: [createdBy], references: [id])
-  memberships Membership[]
-  activities  Activity[]
+  id             String          @id @default(uuid()) @db.Uuid
+  name           String
+  slug           String          @unique
+  industry       String
+  companySize    String
+  country        String
+  timezone       String
+  logoUrl        String?
+  createdBy      String          @db.Uuid
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  creator        Profile         @relation("OrganizationCreator", fields: [createdBy], references: [id])
+  memberships    Membership[]
+  activities     Activity[]
+  knowledgeBases KnowledgeBase[]
 
   @@index([createdBy])
+}
+
+model KnowledgeBase {
+  id             String              @id @default(uuid()) @db.Uuid
+  organizationId String              @db.Uuid
+  name           String
+  description    String
+  department     String
+  status         KnowledgeBaseStatus @default(Active)
+  createdBy      String              @db.Uuid
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator        Profile             @relation("KnowledgeBaseCreator", fields: [createdBy], references: [id])
+  documents      Document[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, status])
+  @@index([organizationId, department])
+}
+
+model Document {
+  id              String            @id @default(uuid()) @db.Uuid
+  knowledgeBaseId String            @db.Uuid
+  fileName        String
+  fileType        DocumentFileType
+  mimeType        String
+  sizeBytes       BigInt
+  storagePath     String            @unique
+  uploadedBy      String            @db.Uuid
+  uploadedAt      DateTime          @default(now())
+  currentVersion  Int               @default(1)
+  status          DocumentStatus    @default(Ready)
+  notes           String            @default("")
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  knowledgeBase   KnowledgeBase     @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  uploader        Profile           @relation("DocumentUploader", fields: [uploadedBy], references: [id])
+  versions        DocumentVersion[]
+
+  @@index([knowledgeBaseId, status])
+  @@index([uploadedBy])
+  @@index([fileName])
+}
+
+model DocumentVersion {
+  id          String           @id @default(uuid()) @db.Uuid
+  documentId  String           @db.Uuid
+  version     Int
+  fileName    String
+  fileType    DocumentFileType
+  mimeType    String
+  sizeBytes   BigInt
+  storagePath String           @unique
+  uploadedBy  String           @db.Uuid
+  uploadedAt  DateTime         @default(now())
+  notes       String           @default("")
+  document    Document         @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  uploader    Profile          @relation("DocumentVersionUploader", fields: [uploadedBy], references: [id])
+
+  @@unique([documentId, version])
+  @@index([uploadedBy])
 }
 
 model Membership {

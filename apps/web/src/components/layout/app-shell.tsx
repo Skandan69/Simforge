@@ -32,7 +32,7 @@ interface AppShellProps {
 
 function Navigation({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
-  return <nav className="flex-1 space-y-1 px-3">{NAVIGATION_ITEMS.map((item) => { const Icon = icons[item.label]; const active = pathname === item.href; return <Link key={item.href} href={item.href} onClick={onNavigate} className={cn("group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors", active ? "bg-sidebar-accent text-primary" : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground")}><Icon className={cn("size-[18px]", active ? "text-primary" : "text-muted-foreground group-hover:text-sidebar-foreground")} />{item.label}</Link>; })}</nav>;
+  return <nav className="flex-1 space-y-1 px-3">{NAVIGATION_ITEMS.map((item) => { const Icon = icons[item.label]; const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`)); return <Link key={item.href} href={item.href} onClick={onNavigate} className={cn("group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors", active ? "bg-sidebar-accent text-primary" : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground")}><Icon className={cn("size-[18px]", active ? "text-primary" : "text-muted-foreground group-hover:text-sidebar-foreground")} />{item.label}</Link>; })}</nav>;
 }
 
 function Brand() {

@@ -17,3 +17,7 @@ Document and agree on:
 3. Inputs, outputs, and success criteria.
 4. Collaboration and persistence requirements.
 5. The smallest end-to-end release worth testing.
+
+## Sprint 2 boundary
+
+Knowledge Studio supports departmental knowledge bases, original document storage, metadata, notes, version history, role-aware access, and metadata search. Document processing and every AI-assisted behavior remain explicitly out of scope.
