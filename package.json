@@ -10,7 +10,6 @@
     "dev": "npm run build --workspace @simforge/shared && concurrently -n shared,web,api -c yellow,cyan,green \"npm run dev --workspace @simforge/shared\" \"npm run dev --workspace @simforge/web\" \"npm run dev --workspace @simforge/api\"",
     "dev:web": "npm run dev --workspace @simforge/web",
     "dev:api": "npm run build --workspace @simforge/shared && npm run dev --workspace @simforge/api",
-    "postinstall": "prisma generate",
     "build:api": "npm run build --workspace @simforge/api",
     "render-build": "npm run build:api",
     "build": "npm run db:generate && npm run build --workspace @simforge/shared && npm run build --workspace @simforge/api && npm run build --workspace @simforge/web",

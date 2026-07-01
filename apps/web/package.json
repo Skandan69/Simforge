@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npm run build:prepare && next build",
+    "build:prepare": "npm run build --workspace @simforge/shared --prefix ../..",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
