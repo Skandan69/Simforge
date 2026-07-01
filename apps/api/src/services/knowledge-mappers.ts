@@ -45,6 +45,7 @@ interface DocumentRecord {
   updatedAt: Date;
   uploader: PersonRecord;
   knowledgeBase: { id: string; name: string; department: string };
+  knowledgeSource?: { id: string; status: "Uploaded" | "Queued" | "Processing" | "Completed" | "Failed" | "Cancelled"; progress: number; failureReason: string | null; processedAt: Date | null } | null;
 }
 
 function person(record: PersonRecord) {
@@ -79,6 +80,7 @@ export function documentSummary(record: DocumentRecord): DocumentSummary {
     status: record.status,
     notes: record.notes,
     updatedAt: record.updatedAt.toISOString(),
+    processing: record.knowledgeSource ? { sourceId: record.knowledgeSource.id, status: record.knowledgeSource.status, progress: record.knowledgeSource.progress, failureReason: record.knowledgeSource.failureReason, processedAt: record.knowledgeSource.processedAt?.toISOString() ?? null } : { sourceId: null, status: "Uploaded", progress: 0, failureReason: null, processedAt: null },
   };
 }
 

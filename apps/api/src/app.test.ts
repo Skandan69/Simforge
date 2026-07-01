@@ -25,7 +25,7 @@ test("health endpoint reports the API service", async () => {
 });
 
 test("Knowledge Studio endpoints require authentication", async () => {
-  for (const path of ["/api/knowledge-bases", "/api/documents", "/api/knowledge-search?q=policy"]) {
+  for (const path of ["/api/knowledge-bases", "/api/documents", "/api/knowledge-search?q=policy", "/api/processing/dashboard", "/api/processing/documents/00000000-0000-0000-0000-000000000000/status"]) {
     const response = await fetch(`${baseUrl}${path}`);
     assert.equal(response.status, 401, path);
   }

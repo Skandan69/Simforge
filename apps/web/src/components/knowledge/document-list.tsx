@@ -4,10 +4,87 @@ import type { DocumentFileType, DocumentSummary } from "@simforge/shared";
 import { formatBytes, formatDate } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ProcessingStatusBadge } from "./processing-status";
 
-const icons: Record<DocumentFileType, typeof File> = { PDF: FileText, DOCX: File, PPTX: Presentation, XLSX: FileSpreadsheet };
+const icons: Record<DocumentFileType, typeof File> = {
+  PDF: FileText,
+  DOCX: File,
+  PPTX: Presentation,
+  XLSX: FileSpreadsheet,
+};
 
 export function DocumentList({ documents }: { documents: DocumentSummary[] }) {
-  if (!documents.length) return <div className="grid min-h-52 place-items-center rounded-xl border border-dashed bg-card p-8 text-center"><div><FileText className="mx-auto size-8 text-muted-foreground" /><h3 className="mt-3 font-semibold">No documents</h3><p className="mt-1 text-sm text-muted-foreground">Uploaded document metadata will appear here.</p></div></div>;
-  return <div className="overflow-hidden rounded-xl border bg-card"><div className="hidden grid-cols-[minmax(0,2fr)_minmax(130px,1fr)_100px_110px_90px] gap-4 border-b bg-muted/40 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground md:grid"><span>Document</span><span>Knowledge Base</span><span>Size</span><span>Updated</span><span /></div><div className="divide-y">{documents.map((document) => { const Icon = icons[document.fileType]; return <div key={document.id} className="grid gap-3 p-4 transition-colors hover:bg-muted/30 md:grid-cols-[minmax(0,2fr)_minmax(130px,1fr)_100px_110px_90px] md:items-center md:gap-4"><div className="flex min-w-0 items-center gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary"><Icon className="size-5" /></span><div className="min-w-0"><p className="truncate text-sm font-medium">{document.fileName}</p><div className="mt-1 flex items-center gap-2"><Badge variant="outline">{document.fileType}</Badge><span className="text-xs text-muted-foreground">v{document.currentVersion}</span><Badge variant={document.status === "Ready" ? "success" : "secondary"}>{document.status}</Badge></div></div></div><div className="min-w-0"><p className="truncate text-sm">{document.knowledgeBase.name}</p><p className="truncate text-xs text-muted-foreground">{document.knowledgeBase.department}</p></div><span className="text-sm text-muted-foreground">{formatBytes(document.sizeBytes)}</span><span className="text-sm text-muted-foreground">{formatDate(document.updatedAt)}</span><Button asChild variant="ghost" size="sm"><Link href={`/knowledge-studio/documents/${document.id}`}>Details</Link></Button></div>; })}</div></div>;
+  if (!documents.length)
+    return (
+      <div className="grid min-h-52 place-items-center rounded-xl border border-dashed bg-card p-8 text-center">
+        <div>
+          <FileText className="mx-auto size-8 text-muted-foreground" />
+          <h3 className="mt-3 font-semibold">No documents</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Uploaded document metadata will appear here.
+          </p>
+        </div>
+      </div>
+    );
+  return (
+    <div className="overflow-hidden rounded-xl border bg-card">
+      <div className="hidden grid-cols-[minmax(0,2fr)_minmax(130px,1fr)_100px_110px_90px] gap-4 border-b bg-muted/40 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground md:grid">
+        <span>Document</span>
+        <span>Knowledge Base</span>
+        <span>Size</span>
+        <span>Updated</span>
+        <span />
+      </div>
+      <div className="divide-y">
+        {documents.map((document) => {
+          const Icon = icons[document.fileType];
+          return (
+            <div
+              key={document.id}
+              className="grid gap-3 p-4 transition-colors hover:bg-muted/30 md:grid-cols-[minmax(0,2fr)_minmax(130px,1fr)_100px_110px_90px] md:items-center md:gap-4"
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+                  <Icon className="size-5" />
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">
+                    {document.fileName}
+                  </p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <Badge variant="outline">{document.fileType}</Badge>
+                    <span className="text-xs text-muted-foreground">
+                      v{document.currentVersion}
+                    </span>
+                    <ProcessingStatusBadge
+                      status={document.processing.status}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm">
+                  {document.knowledgeBase.name}
+                </p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {document.knowledgeBase.department}
+                </p>
+              </div>
+              <span className="text-sm text-muted-foreground">
+                {formatBytes(document.sizeBytes)}
+              </span>
+              <span className="text-sm text-muted-foreground">
+                {formatDate(document.updatedAt)}
+              </span>
+              <Button asChild variant="ghost" size="sm">
+                <Link href={`/knowledge-studio/documents/${document.id}`}>
+                  Details
+                </Link>
+              </Button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }

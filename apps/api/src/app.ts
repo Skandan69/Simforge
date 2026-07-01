@@ -12,6 +12,7 @@ import { knowledgeBasesRouter } from "./routes/knowledge-bases.js";
 import { knowledgeSearchRouter } from "./routes/knowledge-search.js";
 import { meRouter } from "./routes/me.js";
 import { organizationsRouter } from "./routes/organizations.js";
+import { processingRouter } from "./routes/processing.js";
 
 export const app = express();
 const env = getEnv();
@@ -43,6 +44,7 @@ app.use("/api/dashboard", dashboardRouter);
 app.use("/api/knowledge-bases", knowledgeBasesRouter);
 app.use("/api/documents", documentsRouter);
 app.use("/api/knowledge-search", knowledgeSearchRouter);
+app.use("/api/processing", processingRouter);
 
 app.use((_request, response) => {
   response.status(404).json({ error: "Route not found" });

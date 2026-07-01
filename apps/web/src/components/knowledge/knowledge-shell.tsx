@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, FileStack, LayoutDashboard, Search } from "lucide-react";
+import { Activity, BookOpen, FileStack, LayoutDashboard, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { KnowledgeProvider } from "./knowledge-context";
 
@@ -10,6 +10,7 @@ const items = [
   { label: "Dashboard", href: "/knowledge-studio", icon: LayoutDashboard },
   { label: "Knowledge Bases", href: "/knowledge-studio/knowledge-bases", icon: BookOpen },
   { label: "Documents", href: "/knowledge-studio/documents", icon: FileStack },
+  { label: "Processing", href: "/knowledge-studio/processing", icon: Activity },
   { label: "Search", href: "/knowledge-studio/search", icon: Search },
 ];
 

@@ -12,3 +12,9 @@ export async function removeKnowledgeFiles(paths: string[]) {
     if (error) throw new Error(`Storage cleanup failed: ${error.message}`);
   }
 }
+
+export async function downloadKnowledgeFile(path: string) {
+  const { data, error } = await supabaseAdmin.storage.from(KNOWLEDGE_DOCUMENT_BUCKET).download(path);
+  if (error) throw new Error(`Storage download failed: ${error.message}`);
+  return Buffer.from(await data.arrayBuffer());
+}

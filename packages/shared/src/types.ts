@@ -60,6 +60,15 @@ export interface CreateOrganizationInput {
 export type KnowledgeBaseStatus = "Active" | "Archived";
 export type DocumentFileType = "PDF" | "DOCX" | "PPTX" | "XLSX";
 export type DocumentStatus = "Ready" | "Archived" | "Failed";
+export type ProcessingStatus = "Uploaded" | "Queued" | "Processing" | "Completed" | "Failed" | "Cancelled";
+
+export interface ProcessingSummary {
+  sourceId: string | null;
+  status: ProcessingStatus;
+  progress: number;
+  failureReason: string | null;
+  processedAt: string | null;
+}
 
 export interface KnowledgeBaseSummary {
   id: string;
@@ -112,6 +121,7 @@ export interface DocumentSummary {
   status: DocumentStatus;
   notes: string;
   updatedAt: string;
+  processing: ProcessingSummary;
 }
 
 export interface DocumentVersionSummary {
@@ -131,6 +141,27 @@ export interface DocumentDetail extends DocumentSummary {
   storagePath: string;
   versions: DocumentVersionSummary[];
   canEdit: boolean;
+}
+
+export interface ProcessingSourceDetail extends ProcessingSummary {
+  documentId: string;
+  title: string;
+  fileType: DocumentFileType;
+  sizeBytes: number;
+  pageCount: number | null;
+  wordCount: number | null;
+  characterCount: number | null;
+  estimatedTokens: number | null;
+  language: string | null;
+  processingDurationMs: number | null;
+  chunkCount: number;
+  latestJob: { id: string; retryCount: number; maxAttempts: number; queuedAt: string; startedAt: string | null } | null;
+}
+
+export interface ProcessingDashboardResponse {
+  totals: Record<ProcessingStatus, number>;
+  averageProcessingTimeMs: number;
+  recent: ProcessingSourceDetail[];
 }
 
 export interface CreateDocumentInput {

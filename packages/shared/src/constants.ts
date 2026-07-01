@@ -6,6 +6,7 @@ export const KNOWLEDGE_EDITOR_ROLES = ["Owner", "Admin", "Trainer"] as const;
 export const KNOWLEDGE_BASE_STATUSES = ["Active", "Archived"] as const;
 export const DOCUMENT_STATUSES = ["Ready", "Archived", "Failed"] as const;
 export const DOCUMENT_FILE_TYPES = ["PDF", "DOCX", "PPTX", "XLSX"] as const;
+export const PROCESSING_STATUSES = ["Uploaded", "Queued", "Processing", "Completed", "Failed", "Cancelled"] as const;
 export const KNOWLEDGE_DOCUMENT_BUCKET = "knowledge-documents";
 export const MAX_DOCUMENT_SIZE_BYTES = 50 * 1024 * 1024;
 export const DOCUMENT_MIME_TYPES = {

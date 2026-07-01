@@ -13,6 +13,7 @@ import { requireAuth } from "../middleware/auth.js";
 import { getWorkspaceRequest, requireKnowledgeWrite, requireWorkspace } from "../middleware/workspace.js";
 import { documentDetail, documentSummary, versionSummary } from "../services/knowledge-mappers.js";
 import { removeKnowledgeFiles } from "../services/storage.js";
+import { processingEngine } from "../processing/engine.js";
 
 const metadataSchema = z.object({
   fileName: z.string().trim().min(1).max(255),
@@ -36,6 +37,7 @@ const updateSchema = z.object({
 const includeDocument = {
   uploader: { select: { id: true, fullName: true, email: true } },
   knowledgeBase: { select: { id: true, name: true, department: true } },
+  knowledgeSource: { select: { id: true, status: true, progress: true, failureReason: true, processedAt: true } },
 } as const;
 
 const includeVersion = {
@@ -107,6 +109,7 @@ documentsRouter.post("/", requireKnowledgeWrite, async (request, response) => {
     },
     include: includeDocument,
   });
+  await processingEngine.queue(document.id, organizationId);
   response.status(201).json(documentSummary(document));
 });
 
@@ -205,5 +208,6 @@ documentsRouter.post("/:id/versions", requireKnowledgeWrite, async (request, res
       versions: { orderBy: { version: "desc" }, include: includeVersion },
     },
   });
+  await processingEngine.reprocess(updated.id, organizationId);
   response.status(201).json(documentDetail(updated, true));
 });

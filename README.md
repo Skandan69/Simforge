@@ -2,7 +2,7 @@
 
 SimForge is an enterprise simulation-training platform foundation built as a TypeScript monorepo. It includes Supabase authentication, organization workspaces, role-aware access, and Knowledge Studio for governed document storage and metadata management.
 
-Simulation Studio remains a navigation placeholder. Knowledge Studio stores source files and metadata only; no AI, embeddings, RAG, indexing, summaries, or document processing exists.
+Simulation Studio remains a navigation placeholder. The Knowledge Processing Engine deterministically extracts and chunks supported files for future modules. It contains no AI, embeddings, vector storage, RAG, summaries, or generated content.
 
 ## Repository structure
 
@@ -48,7 +48,7 @@ docs/           Product and architecture notes
    npm run db:migrate
    ```
 
-5. Run [`database/supabase/storage.sql`](database/supabase/storage.sql) and [`database/supabase/knowledge-storage.sql`](database/supabase/knowledge-storage.sql) in the Supabase SQL editor. These configure organization logos and the private, role-protected knowledge-document bucket.
+5. Run [`database/supabase/storage.sql`](database/supabase/storage.sql), [`database/supabase/knowledge-storage.sql`](database/supabase/knowledge-storage.sql), and [`database/supabase/processing-rls.sql`](database/supabase/processing-rls.sql) in the Supabase SQL editor. These configure private storage and keep processing tables accessible only through the authenticated API.
 
 6. In Supabase Authentication URL Configuration, add these local redirect URLs:
 
@@ -92,3 +92,9 @@ All workspace pages are protected in Next.js, and the API independently validate
 Knowledge Studio supports multiple departmental knowledge bases, PDF/DOCX/PPTX/XLSX uploads up to 50 MB, real upload progress, notes, version replacement, private downloads, archiving, deletion, and metadata search. Owner, Admin, and Trainer can make changes. Manager and Learner are read-only.
 
 Add `SUPABASE_SERVICE_ROLE_KEY` only to the API environment. It is used for trusted Storage cleanup and must never be exposed through a `NEXT_PUBLIC_` variable.
+
+## Knowledge Processing Engine
+
+Every new or replaced PDF, DOCX, PPTX, or XLSX file is queued automatically. The API worker downloads the private source, validates its signature, extracts plain text, captures document metadata, splits text into configurable internal chunks, and records progress and failures. Processing can be cancelled, retried, or rerun from Knowledge Studio.
+
+The source-centric `KnowledgeSource` and `KnowledgeChunk` contracts are independent of the UI. Future Simulation Studio and AI services should consume completed chunks through the processing API rather than reading uploaded files directly. Future source types are represented in the schema for websites, media, OCR, SharePoint, Confluence, and APIs, but their adapters are intentionally deferred.

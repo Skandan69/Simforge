@@ -33,6 +33,35 @@ enum DocumentStatus {
   Failed
 }
 
+enum ProcessingStatus {
+  Uploaded
+  Queued
+  Processing
+  Completed
+  Failed
+  Cancelled
+}
+
+enum KnowledgeSourceType {
+  PDF
+  DOCX
+  PPTX
+  XLSX
+  Website
+  Video
+  Audio
+  Image
+  SharePoint
+  Confluence
+  API
+}
+
+enum ProcessingLogLevel {
+  Info
+  Warning
+  Error
+}
+
 model Profile {
   id                    String            @id @db.Uuid
   email                 String            @unique
@@ -64,6 +93,7 @@ model Organization {
   memberships    Membership[]
   activities     Activity[]
   knowledgeBases KnowledgeBase[]
+  knowledgeSources KnowledgeSource[]
 
   @@index([createdBy])
 }
@@ -105,10 +135,102 @@ model Document {
   knowledgeBase   KnowledgeBase     @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
   uploader        Profile           @relation("DocumentUploader", fields: [uploadedBy], references: [id])
   versions        DocumentVersion[]
+  knowledgeSource KnowledgeSource?
+  knowledgeChunks KnowledgeChunk[]
 
   @@index([knowledgeBaseId, status])
   @@index([uploadedBy])
   @@index([fileName])
+}
+
+model KnowledgeSource {
+  id                   String              @id @default(uuid()) @db.Uuid
+  organizationId       String              @db.Uuid
+  documentId           String?             @unique @db.Uuid
+  sourceType           KnowledgeSourceType
+  title                String
+  mimeType             String?
+  sizeBytes            BigInt?
+  status               ProcessingStatus    @default(Uploaded)
+  progress             Int                 @default(0)
+  extractedText        String?             @db.Text
+  pageCount            Int?
+  wordCount            Int?
+  characterCount       Int?
+  estimatedTokens      Int?
+  language             String?
+  processingDurationMs Int?
+  processedAt          DateTime?
+  failureReason        String?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  organization         Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  document             Document?           @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  jobs                 ProcessingJob[]
+  chunks               KnowledgeChunk[]
+  logs                 ProcessingLog[]
+
+  @@index([organizationId, status])
+  @@index([sourceType])
+}
+
+model ProcessingJob {
+  id                String           @id @default(uuid()) @db.Uuid
+  sourceId          String           @db.Uuid
+  status            ProcessingStatus @default(Queued)
+  progress          Int              @default(0)
+  attempt           Int              @default(0)
+  retryCount        Int              @default(0)
+  maxAttempts       Int              @default(3)
+  queuedAt          DateTime         @default(now())
+  startedAt         DateTime?
+  completedAt       DateTime?
+  cancelledAt       DateTime?
+  cancelRequestedAt DateTime?
+  lastAttemptAt     DateTime?
+  durationMs        Int?
+  failureReason     String?
+  errorMessage      String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  source            KnowledgeSource  @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  logs              ProcessingLog[]
+
+  @@index([status, queuedAt])
+  @@index([sourceId, createdAt])
+}
+
+model KnowledgeChunk {
+  id             String          @id @default(uuid()) @db.Uuid
+  sourceId       String          @db.Uuid
+  documentId     String?         @db.Uuid
+  chunkNumber    Int
+  text           String          @db.Text
+  characterCount Int
+  estimatedTokens Int
+  metadata       Json
+  createdAt      DateTime        @default(now())
+  source         KnowledgeSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  document       Document?       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, chunkNumber])
+  @@index([documentId])
+}
+
+model ProcessingLog {
+  id        String             @id @default(uuid()) @db.Uuid
+  sourceId  String             @db.Uuid
+  jobId     String?            @db.Uuid
+  level     ProcessingLogLevel @default(Info)
+  event     String
+  message   String
+  details   Json?
+  createdAt DateTime           @default(now())
+  source    KnowledgeSource    @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  job       ProcessingJob?     @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([sourceId, createdAt])
+  @@index([jobId, createdAt])
 }
 
 model DocumentVersion {
