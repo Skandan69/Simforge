@@ -1,2 +1,4 @@
-import { ModulePlaceholder } from "@/components/modules/module-placeholder";
-export default function Page() { return <ModulePlaceholder title="Simulation Studio" description="Design and manage practice experiences in a future product sprint." />; }
+import { SimulationLibrary } from "@/components/simulation/simulation-library";
+export default function SimulationDashboardPage() {
+  return <SimulationLibrary dashboard />;
+}

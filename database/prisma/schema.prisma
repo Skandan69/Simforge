@@ -62,6 +62,19 @@ enum ProcessingLogLevel {
   Error
 }
 
+enum SimulationDifficulty {
+  Beginner
+  Intermediate
+  Advanced
+  Expert
+}
+
+enum SimulationStatus {
+  Draft
+  Active
+  Archived
+}
+
 model Profile {
   id                    String            @id @db.Uuid
   email                 String            @unique
@@ -75,6 +88,9 @@ model Profile {
   knowledgeBasesCreated KnowledgeBase[]   @relation("KnowledgeBaseCreator")
   documentsUploaded     Document[]        @relation("DocumentUploader")
   versionsUploaded      DocumentVersion[] @relation("DocumentVersionUploader")
+  simulationsCreated    Simulation[]       @relation("SimulationCreator")
+  personasCreated       SimulationPersona[] @relation("PersonaCreator")
+  criteriaCreated       SimulationEvaluationCriterion[] @relation("CriterionCreator")
 }
 
 model Organization {
@@ -94,6 +110,9 @@ model Organization {
   activities     Activity[]
   knowledgeBases KnowledgeBase[]
   knowledgeSources KnowledgeSource[]
+  simulations     Simulation[]
+  simulationPersonas SimulationPersona[]
+  evaluationCriteria SimulationEvaluationCriterion[]
 
   @@index([createdBy])
 }
@@ -111,10 +130,121 @@ model KnowledgeBase {
   organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   creator        Profile             @relation("KnowledgeBaseCreator", fields: [createdBy], references: [id])
   documents      Document[]
+  simulationLinks SimulationKnowledgeBase[]
 
   @@unique([organizationId, name])
   @@index([organizationId, status])
   @@index([organizationId, department])
+}
+
+model Simulation {
+  id                String               @id @default(uuid()) @db.Uuid
+  organizationId    String               @db.Uuid
+  title             String
+  description       String
+  industry          String
+  department        String
+  jobRole           String
+  category          String
+  difficulty        SimulationDifficulty
+  status            SimulationStatus     @default(Draft)
+  estimatedMinutes  Int
+  personaId         String?              @db.Uuid
+  scenarioSetup     String               @db.Text
+  successCriteria   String               @db.Text
+  createdBy         String               @db.Uuid
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  organization      Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator           Profile              @relation("SimulationCreator", fields: [createdBy], references: [id])
+  persona           SimulationPersona?   @relation(fields: [personaId], references: [id], onDelete: SetNull)
+  objectives        SimulationObjective[]
+  evaluationCriteria SimulationCriterionLink[]
+  knowledgeBases    SimulationKnowledgeBase[]
+  versions          SimulationVersion[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, department])
+  @@index([organizationId, difficulty])
+  @@index([personaId])
+}
+
+model SimulationPersona {
+  id                 String       @id @default(uuid()) @db.Uuid
+  organizationId     String       @db.Uuid
+  name               String
+  role               String
+  personality        String
+  tone               String
+  difficultyBehavior String       @db.Text
+  backgroundContext  String       @db.Text
+  createdBy          String       @db.Uuid
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator            Profile      @relation("PersonaCreator", fields: [createdBy], references: [id])
+  simulations        Simulation[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, updatedAt])
+}
+
+model SimulationObjective {
+  id           String     @id @default(uuid()) @db.Uuid
+  simulationId String     @db.Uuid
+  title        String
+  sortOrder    Int
+  simulation   Simulation @relation(fields: [simulationId], references: [id], onDelete: Cascade)
+
+  @@unique([simulationId, sortOrder])
+}
+
+model SimulationEvaluationCriterion {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  name           String
+  description    String
+  isDefault      Boolean      @default(false)
+  createdBy      String       @db.Uuid
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator        Profile      @relation("CriterionCreator", fields: [createdBy], references: [id])
+  simulations    SimulationCriterionLink[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, updatedAt])
+}
+
+model SimulationCriterionLink {
+  simulationId String                        @db.Uuid
+  criterionId  String                        @db.Uuid
+  simulation   Simulation                    @relation(fields: [simulationId], references: [id], onDelete: Cascade)
+  criterion    SimulationEvaluationCriterion @relation(fields: [criterionId], references: [id], onDelete: Cascade)
+
+  @@id([simulationId, criterionId])
+  @@index([criterionId])
+}
+
+model SimulationKnowledgeBase {
+  simulationId  String        @db.Uuid
+  knowledgeBaseId String      @db.Uuid
+  simulation    Simulation    @relation(fields: [simulationId], references: [id], onDelete: Cascade)
+  knowledgeBase KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+
+  @@id([simulationId, knowledgeBaseId])
+  @@index([knowledgeBaseId])
+}
+
+model SimulationVersion {
+  id           String     @id @default(uuid()) @db.Uuid
+  simulationId String     @db.Uuid
+  version      Int
+  snapshot     Json
+  createdAt    DateTime   @default(now())
+  simulation   Simulation @relation(fields: [simulationId], references: [id], onDelete: Cascade)
+
+  @@unique([simulationId, version])
 }
 
 model Document {

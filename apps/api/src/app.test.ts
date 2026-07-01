@@ -11,7 +11,7 @@ process.env.SUPABASE_SERVICE_ROLE_KEY = "service_role_test";
 process.env.WEB_URL = "http://localhost:3000";
 
 const { app } = await import("./app.js");
-const { requireKnowledgeWrite } = await import("./middleware/workspace.js");
+const { requireKnowledgeWrite, requireSimulationRead, requireSimulationWrite } = await import("./middleware/workspace.js");
 const server = app.listen(0);
 await new Promise<void>((resolve) => server.once("listening", resolve));
 const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -31,6 +31,13 @@ test("Knowledge Studio endpoints require authentication", async () => {
   }
 });
 
+test("Simulation Studio endpoints require authentication", async () => {
+  for (const path of ["/api/simulations", "/api/simulations/dashboard", "/api/simulation-personas", "/api/simulation-criteria"]) {
+    const response = await fetch(`${baseUrl}${path}`);
+    assert.equal(response.status, 401, path);
+  }
+});
+
 function authorize(role: UserRole) {
   let status = 200;
   let body: unknown;
@@ -42,6 +49,14 @@ function authorize(role: UserRole) {
   } as unknown as Response;
   requireKnowledgeWrite(request, response, () => { nextCalled = true; });
   return { status, body, nextCalled };
+}
+
+function invokePermission(role: UserRole, middleware: typeof requireSimulationRead) {
+  let status = 200; let nextCalled = false;
+  const request = { workspace: { organizationId: "00000000-0000-0000-0000-000000000000", role } } as unknown as Request;
+  const response = { status(value: number) { status = value; return this; }, json() { return this; } } as unknown as Response;
+  middleware(request, response, () => { nextCalled = true; });
+  return { status, nextCalled };
 }
 
 test("Owner, Admin, and Trainer have Knowledge Studio write access", () => {
@@ -57,4 +72,15 @@ test("Manager and Learner are enforced as read-only", () => {
     assert.equal(result.status, 403, role);
     assert.deepEqual(result.body, { error: "Your role has read-only access to Knowledge Studio", code: "READ_ONLY_ROLE" });
   }
+});
+
+test("Simulation Studio permissions allow trainers, keep managers read-only, and exclude learners", () => {
+  for (const role of ["Owner", "Admin", "Trainer"] as UserRole[]) {
+    assert.equal(invokePermission(role, requireSimulationRead).nextCalled, true);
+    assert.equal(invokePermission(role, requireSimulationWrite).nextCalled, true);
+  }
+  assert.equal(invokePermission("Manager", requireSimulationRead).nextCalled, true);
+  assert.equal(invokePermission("Manager", requireSimulationWrite).status, 403);
+  assert.equal(invokePermission("Learner", requireSimulationRead).status, 403);
+  assert.equal(invokePermission("Learner", requireSimulationWrite).status, 403);
 });

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Router } from "express";
 import { z } from "zod";
 import type { CreateOrganizationInput, CurrentUserResponse } from "@simforge/shared";
+import { DEFAULT_EVALUATION_CRITERIA } from "@simforge/shared";
 import type { AuthenticatedRequest } from "../middleware/auth.js";
 import { requireAuth } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
@@ -62,6 +63,14 @@ organizationsRouter.post("/", requireAuth, async (request, response) => {
           action: "organization.created",
           description: `${input.name} workspace created`,
         },
+      },
+      evaluationCriteria: {
+        create: DEFAULT_EVALUATION_CRITERIA.map((name) => ({
+          name,
+          description: `Evaluate ${name.toLowerCase()} during the scenario.`,
+          isDefault: true,
+          createdBy: profile.id,
+        })),
       },
     },
   });

@@ -1,8 +1,8 @@
 # SimForge
 
-SimForge is an enterprise simulation-training platform foundation built as a TypeScript monorepo. It includes Supabase authentication, organization workspaces, role-aware access, and Knowledge Studio for governed document storage and metadata management.
+SimForge is an enterprise simulation-training platform foundation built as a TypeScript monorepo. It includes Supabase authentication, organization workspaces, role-aware access, governed knowledge processing, and Simulation Studio scenario configuration.
 
-Simulation Studio remains a navigation placeholder. The Knowledge Processing Engine deterministically extracts and chunks supported files for future modules. It contains no AI, embeddings, vector storage, RAG, summaries, or generated content.
+Simulation Studio lets trainers configure structured scenarios, personas, objectives, linked knowledge, and evaluation criteria. It does not run conversations, attempts, scoring, coaching, or analytics. The Knowledge Processing Engine remains deterministic and contains no AI, embeddings, vector storage, RAG, summaries, or generated content.
 
 ## Repository structure
 
@@ -48,7 +48,7 @@ docs/           Product and architecture notes
    npm run db:migrate
    ```
 
-5. Run [`database/supabase/storage.sql`](database/supabase/storage.sql), [`database/supabase/knowledge-storage.sql`](database/supabase/knowledge-storage.sql), and [`database/supabase/processing-rls.sql`](database/supabase/processing-rls.sql) in the Supabase SQL editor. These configure private storage and keep processing tables accessible only through the authenticated API.
+5. Run [`database/supabase/storage.sql`](database/supabase/storage.sql), [`database/supabase/knowledge-storage.sql`](database/supabase/knowledge-storage.sql), [`database/supabase/processing-rls.sql`](database/supabase/processing-rls.sql), and [`database/supabase/simulation-rls.sql`](database/supabase/simulation-rls.sql) in the Supabase SQL editor. These configure private storage and keep processing and simulation tables accessible only through the authenticated API.
 
 6. In Supabase Authentication URL Configuration, add these local redirect URLs:
 
@@ -98,3 +98,9 @@ Add `SUPABASE_SERVICE_ROLE_KEY` only to the API environment. It is used for trus
 Every new or replaced PDF, DOCX, PPTX, or XLSX file is queued automatically. The API worker downloads the private source, validates its signature, extracts plain text, captures document metadata, splits text into configurable internal chunks, and records progress and failures. Processing can be cancelled, retried, or rerun from Knowledge Studio.
 
 The source-centric `KnowledgeSource` and `KnowledgeChunk` contracts are independent of the UI. Future Simulation Studio and AI services should consume completed chunks through the processing API rather than reading uploaded files directly. Future source types are represented in the schema for websites, media, OCR, SharePoint, Confluence, and APIs, but their adapters are intentionally deferred.
+
+## Simulation Studio
+
+Owners, Admins, and Trainers can build, edit, duplicate, archive, and delete simulations through a guided six-step builder. Managers can browse and preview simulations, while Learners are excluded until learner attempts are introduced. Reusable personas and evaluation criteria are organization-scoped, and each simulation update creates an immutable configuration snapshot.
+
+Simulation Studio consumes linked Knowledge Base references only. Live roleplay, AI conversations, scoring, coaching, learner attempts, and analytics are intentionally outside this foundation sprint.

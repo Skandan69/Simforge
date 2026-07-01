@@ -13,6 +13,7 @@ import { knowledgeSearchRouter } from "./routes/knowledge-search.js";
 import { meRouter } from "./routes/me.js";
 import { organizationsRouter } from "./routes/organizations.js";
 import { processingRouter } from "./routes/processing.js";
+import { simulationCriteriaRouter, simulationPersonasRouter, simulationsRouter } from "./routes/simulations.js";
 
 export const app = express();
 const env = getEnv();
@@ -45,6 +46,9 @@ app.use("/api/knowledge-bases", knowledgeBasesRouter);
 app.use("/api/documents", documentsRouter);
 app.use("/api/knowledge-search", knowledgeSearchRouter);
 app.use("/api/processing", processingRouter);
+app.use("/api/simulations", simulationsRouter);
+app.use("/api/simulation-personas", simulationPersonasRouter);
+app.use("/api/simulation-criteria", simulationCriteriaRouter);
 
 app.use((_request, response) => {
   response.status(404).json({ error: "Route not found" });

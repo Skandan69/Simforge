@@ -60,7 +60,8 @@ export interface CreateOrganizationInput {
 export type KnowledgeBaseStatus = "Active" | "Archived";
 export type DocumentFileType = "PDF" | "DOCX" | "PPTX" | "XLSX";
 export type DocumentStatus = "Ready" | "Archived" | "Failed";
-export type ProcessingStatus = "Uploaded" | "Queued" | "Processing" | "Completed" | "Failed" | "Cancelled";
+export type ProcessingStatus =
+  "Uploaded" | "Queued" | "Processing" | "Completed" | "Failed" | "Cancelled";
 
 export interface ProcessingSummary {
   sourceId: string | null;
@@ -155,7 +156,13 @@ export interface ProcessingSourceDetail extends ProcessingSummary {
   language: string | null;
   processingDurationMs: number | null;
   chunkCount: number;
-  latestJob: { id: string; retryCount: number; maxAttempts: number; queuedAt: string; startedAt: string | null } | null;
+  latestJob: {
+    id: string;
+    retryCount: number;
+    maxAttempts: number;
+    queuedAt: string;
+    startedAt: string | null;
+  } | null;
 }
 
 export interface ProcessingDashboardResponse {
@@ -185,4 +192,79 @@ export interface KnowledgeSearchResponse {
   query: string;
   documents: DocumentSummary[];
   knowledgeBases: KnowledgeBaseSummary[];
+}
+
+export type SimulationDifficulty =
+  "Beginner" | "Intermediate" | "Advanced" | "Expert";
+export type SimulationStatus = "Draft" | "Active" | "Archived";
+
+export interface SimulationPersonaSummary {
+  id: string;
+  name: string;
+  role: string;
+  personality: string;
+  tone: string;
+  difficultyBehavior: string;
+  backgroundContext: string;
+  updatedAt: string;
+}
+
+export interface SimulationCriterionSummary {
+  id: string;
+  name: string;
+  description: string;
+  isDefault: boolean;
+  updatedAt: string;
+}
+
+export interface SimulationSummary {
+  id: string;
+  title: string;
+  description: string;
+  industry: string;
+  department: string;
+  jobRole: string;
+  category: string;
+  difficulty: SimulationDifficulty;
+  status: SimulationStatus;
+  estimatedMinutes: number;
+  persona: { id: string; name: string; role: string } | null;
+  objectiveCount: number;
+  knowledgeBaseCount: number;
+  criterionCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SimulationDetail extends SimulationSummary {
+  scenarioSetup: string;
+  successCriteria: string;
+  objectives: Array<{ id: string; title: string; sortOrder: number }>;
+  knowledgeBases: Array<{ id: string; name: string; department: string }>;
+  evaluationCriteria: SimulationCriterionSummary[];
+  canEdit: boolean;
+}
+
+export interface SaveSimulationInput {
+  title: string;
+  description: string;
+  industry: string;
+  department: string;
+  jobRole: string;
+  category: string;
+  difficulty: SimulationDifficulty;
+  status: SimulationStatus;
+  estimatedMinutes: number;
+  personaId?: string | null;
+  scenarioSetup: string;
+  successCriteria: string;
+  objectives: string[];
+  knowledgeBaseIds: string[];
+  criterionIds: string[];
+}
+
+export interface SimulationDashboardResponse {
+  canEdit: boolean;
+  totals: { total: number; draft: number; active: number; archived: number };
+  simulations: SimulationSummary[];
 }
