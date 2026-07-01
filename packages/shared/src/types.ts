@@ -268,3 +268,51 @@ export interface SimulationDashboardResponse {
   totals: { total: number; draft: number; active: number; archived: number };
   simulations: SimulationSummary[];
 }
+
+export type SimulationSessionStatus = "IN_PROGRESS" | "COMPLETED" | "FAILED";
+export type SimulationMessageRole = "learner" | "ai" | "system";
+export type WorkforceCapability =
+  (typeof import("./constants.js").WORKFORCE_CAPABILITIES)[number];
+
+export interface SimulationMessageResponse {
+  id: string;
+  sessionId: string;
+  role: SimulationMessageRole;
+  content: string;
+  createdAt: string;
+}
+
+export interface CapabilityScoreResponse {
+  id: string;
+  capabilityName: WorkforceCapability;
+  score: number;
+  evidence: string;
+  recommendation: string;
+  createdAt: string;
+}
+
+export interface SimulationEvaluationResponse {
+  id: string;
+  overallScore: number;
+  strengths: string[];
+  improvementAreas: string[];
+  evidence: Array<{ capability: string; observation: string }>;
+  recommendedNextPractice: string;
+  createdAt: string;
+}
+
+export interface SimulationSessionResponse {
+  id: string;
+  organizationId: string;
+  simulationId: string;
+  learnerId: string;
+  status: SimulationSessionStatus;
+  startedAt: string;
+  completedAt: string | null;
+  overallScore: number | null;
+  createdAt: string;
+  updatedAt: string;
+  messages: SimulationMessageResponse[];
+  evaluation: SimulationEvaluationResponse | null;
+  capabilityScores: CapabilityScoreResponse[];
+}

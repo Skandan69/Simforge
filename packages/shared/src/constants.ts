@@ -37,6 +37,14 @@ export const DEFAULT_EVALUATION_CRITERIA = [
   "Confidence",
   "Professionalism",
 ] as const;
+export const WORKFORCE_CAPABILITIES = [
+  "Communication",
+  "Product Knowledge",
+  "Policy Compliance",
+  "Empathy",
+  "Problem Solving",
+  "Decision Making",
+] as const;
 export const KNOWLEDGE_DOCUMENT_BUCKET = "knowledge-documents";
 export const MAX_DOCUMENT_SIZE_BYTES = 50 * 1024 * 1024;
 export const DOCUMENT_MIME_TYPES = {

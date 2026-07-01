@@ -75,6 +75,18 @@ enum SimulationStatus {
   Archived
 }
 
+enum SimulationSessionStatus {
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+enum SimulationMessageRole {
+  learner
+  ai
+  system
+}
+
 model Profile {
   id                    String            @id @db.Uuid
   email                 String            @unique
@@ -91,6 +103,7 @@ model Profile {
   simulationsCreated    Simulation[]       @relation("SimulationCreator")
   personasCreated       SimulationPersona[] @relation("PersonaCreator")
   criteriaCreated       SimulationEvaluationCriterion[] @relation("CriterionCreator")
+  simulationSessions    SimulationSession[] @relation("SessionLearner")
 }
 
 model Organization {
@@ -113,6 +126,7 @@ model Organization {
   simulations     Simulation[]
   simulationPersonas SimulationPersona[]
   evaluationCriteria SimulationEvaluationCriterion[]
+  simulationSessions SimulationSession[]
 
   @@index([createdBy])
 }
@@ -162,6 +176,7 @@ model Simulation {
   evaluationCriteria SimulationCriterionLink[]
   knowledgeBases    SimulationKnowledgeBase[]
   versions          SimulationVersion[]
+  sessions          SimulationSession[]
 
   @@index([organizationId, status])
   @@index([organizationId, department])
@@ -245,6 +260,66 @@ model SimulationVersion {
   simulation   Simulation @relation(fields: [simulationId], references: [id], onDelete: Cascade)
 
   @@unique([simulationId, version])
+}
+
+model SimulationSession {
+  id             String                  @id @default(uuid()) @db.Uuid
+  organizationId String                  @db.Uuid
+  simulationId   String                  @db.Uuid
+  learnerId      String                  @db.Uuid
+  status         SimulationSessionStatus @default(IN_PROGRESS)
+  startedAt      DateTime                @default(now())
+  completedAt    DateTime?
+  overallScore   Float?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  organization   Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  simulation     Simulation              @relation(fields: [simulationId], references: [id], onDelete: Cascade)
+  learner        Profile                 @relation("SessionLearner", fields: [learnerId], references: [id], onDelete: Cascade)
+  messages       SimulationMessage[]
+  evaluation     SimulationEvaluation?
+  capabilityScores CapabilityScore[]
+
+  @@index([organizationId, createdAt])
+  @@index([simulationId, status])
+  @@index([learnerId, createdAt])
+}
+
+model SimulationMessage {
+  id        String                @id @default(uuid()) @db.Uuid
+  sessionId String                @db.Uuid
+  role      SimulationMessageRole
+  content   String                @db.Text
+  createdAt DateTime              @default(now())
+  session   SimulationSession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+}
+
+model SimulationEvaluation {
+  id                      String            @id @default(uuid()) @db.Uuid
+  sessionId               String            @unique @db.Uuid
+  overallScore            Float
+  strengths               Json
+  improvementAreas        Json
+  evidence                 Json
+  recommendedNextPractice String            @db.Text
+  createdAt               DateTime          @default(now())
+  session                 SimulationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model CapabilityScore {
+  id               String            @id @default(uuid()) @db.Uuid
+  sessionId        String            @db.Uuid
+  capabilityName   String
+  score            Float
+  evidence         String            @db.Text
+  recommendation   String            @db.Text
+  createdAt        DateTime          @default(now())
+  session          SimulationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, capabilityName])
+  @@index([sessionId])
 }
 
 model Document {

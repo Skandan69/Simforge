@@ -81,6 +81,16 @@ test("Simulation Studio endpoints require authentication", async () => {
   }
 });
 
+test("Sophia simulation session endpoints require authentication", async () => {
+  for (const path of [
+    "/api/simulation-sessions",
+    "/api/simulation-sessions/00000000-0000-0000-0000-000000000000",
+  ]) {
+    const response = await fetch(`${baseUrl}${path}`);
+    assert.equal(response.status, 401, path);
+  }
+});
+
 function authorize(role: UserRole) {
   let status = 200;
   let body: unknown;

@@ -6,3 +6,7 @@ alter table public."SimulationEvaluationCriterion" enable row level security;
 alter table public."SimulationCriterionLink" enable row level security;
 alter table public."SimulationKnowledgeBase" enable row level security;
 alter table public."SimulationVersion" enable row level security;
+alter table public."SimulationSession" enable row level security;
+alter table public."SimulationMessage" enable row level security;
+alter table public."SimulationEvaluation" enable row level security;
+alter table public."CapabilityScore" enable row level security;

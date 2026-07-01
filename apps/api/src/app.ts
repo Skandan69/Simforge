@@ -18,6 +18,7 @@ import {
   simulationPersonasRouter,
   simulationsRouter,
 } from "./routes/simulations.js";
+import { simulationSessionsRouter } from "./routes/simulation-sessions.js";
 
 export const app = express();
 const env = getEnv();
@@ -68,6 +69,7 @@ app.use("/api/processing", processingRouter);
 app.use("/api/simulations", simulationsRouter);
 app.use("/api/simulation-personas", simulationPersonasRouter);
 app.use("/api/simulation-criteria", simulationCriteriaRouter);
+app.use("/api/simulation-sessions", simulationSessionsRouter);
 
 app.use((_request, response) => {
   response.status(404).json({ error: "Route not found" });
@@ -81,12 +83,10 @@ app.use(
     _next: express.NextFunction,
   ) => {
     if (error instanceof ZodError) {
-      response
-        .status(400)
-        .json({
-          error: "Invalid request",
-          details: error.flatten().fieldErrors,
-        });
+      response.status(400).json({
+        error: "Invalid request",
+        details: error.flatten().fieldErrors,
+      });
       return;
     }
 
