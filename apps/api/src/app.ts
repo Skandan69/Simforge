@@ -13,14 +13,33 @@ import { knowledgeSearchRouter } from "./routes/knowledge-search.js";
 import { meRouter } from "./routes/me.js";
 import { organizationsRouter } from "./routes/organizations.js";
 import { processingRouter } from "./routes/processing.js";
-import { simulationCriteriaRouter, simulationPersonasRouter, simulationsRouter } from "./routes/simulations.js";
+import {
+  simulationCriteriaRouter,
+  simulationPersonasRouter,
+  simulationsRouter,
+} from "./routes/simulations.js";
 
 export const app = express();
 const env = getEnv();
+const allowedOrigins = new Set([
+  "http://localhost:3000",
+  "http://localhost:3001",
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:3001",
+  new URL(env.WEB_URL).origin,
+  ...(env.FRONTEND_URL ? [new URL(env.FRONTEND_URL).origin] : []),
+]);
 
 app.disable("x-powered-by");
 app.use(helmet());
-app.use(cors({ origin: env.WEB_URL, credentials: true }));
+app.use(
+  cors({
+    origin(origin, callback) {
+      callback(null, !origin || allowedOrigins.has(origin));
+    },
+    credentials: true,
+  }),
+);
 app.use(express.json({ limit: "1mb" }));
 app.use(
   "/api",
@@ -54,17 +73,31 @@ app.use((_request, response) => {
   response.status(404).json({ error: "Route not found" });
 });
 
-app.use((error: unknown, _request: express.Request, response: express.Response, _next: express.NextFunction) => {
-  if (error instanceof ZodError) {
-    response.status(400).json({ error: "Invalid request", details: error.flatten().fieldErrors });
-    return;
-  }
+app.use(
+  (
+    error: unknown,
+    _request: express.Request,
+    response: express.Response,
+    _next: express.NextFunction,
+  ) => {
+    if (error instanceof ZodError) {
+      response
+        .status(400)
+        .json({
+          error: "Invalid request",
+          details: error.flatten().fieldErrors,
+        });
+      return;
+    }
 
-  if (error instanceof HttpError) {
-    response.status(error.status).json({ error: error.message, code: error.code });
-    return;
-  }
+    if (error instanceof HttpError) {
+      response
+        .status(error.status)
+        .json({ error: error.message, code: error.code });
+      return;
+    }
 
-  console.error(error);
-  response.status(500).json({ error: "An unexpected error occurred" });
-});
+    console.error(error);
+    response.status(500).json({ error: "An unexpected error occurred" });
+  },
+);

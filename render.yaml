@@ -23,3 +23,5 @@ services:
         sync: false
       - key: WEB_URL
         sync: false
+      - key: FRONTEND_URL
+        value: https://simforge-web-pi.vercel.app
