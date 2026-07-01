@@ -10,6 +10,9 @@
     "dev": "npm run build --workspace @simforge/shared && concurrently -n shared,web,api -c yellow,cyan,green \"npm run dev --workspace @simforge/shared\" \"npm run dev --workspace @simforge/web\" \"npm run dev --workspace @simforge/api\"",
     "dev:web": "npm run dev --workspace @simforge/web",
     "dev:api": "npm run build --workspace @simforge/shared && npm run dev --workspace @simforge/api",
+    "postinstall": "prisma generate",
+    "build:api": "npm run build --workspace @simforge/api",
+    "render-build": "npm run build:api",
     "build": "npm run db:generate && npm run build --workspace @simforge/shared && npm run build --workspace @simforge/api && npm run build --workspace @simforge/web",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
@@ -18,11 +21,13 @@
     "db:validate": "prisma validate",
     "db:migrate": "prisma migrate dev"
   },
-  "devDependencies": {
-    "concurrently": "^9.2.1",
-    "dotenv": "^17.2.3",
+  "dependencies": {
     "prisma": "^7.8.0",
     "typescript": "^6.0.3"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "dotenv": "^17.2.3"
   },
   "overrides": {
     "@hono/node-server": "^1.19.13"
