@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { BookOpen, BrainCircuit, CheckCircle2, ClipboardCheck, ClipboardPenLine, Plus, RefreshCw, UserPlus, Users } from "lucide-react";
+import { BookOpen, BrainCircuit, CheckCircle2, ClipboardCheck, ClipboardPenLine, Gauge, Plus, RefreshCw, UserPlus, Users } from "lucide-react";
 import type { DashboardResponse } from "@simforge/shared";
 import { ApiError, apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ const kpiConfig = [
 ] as const;
 
 const quickActions = [
+  { label: "View Capability Profile", description: "Review capability progress", href: "/capability-profile", icon: Gauge },
   { label: "Invite users", description: "Grow your workspace team", href: "/settings", icon: UserPlus },
   { label: "Create knowledge base", description: "Prepare source material", href: "/knowledge-studio", icon: BookOpen },
   { label: "New simulation", description: "Open Simulation Studio", href: "/simulation-studio", icon: BrainCircuit },

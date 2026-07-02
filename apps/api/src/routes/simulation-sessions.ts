@@ -15,6 +15,7 @@ import {
   createPlaceholderOpeningMessage,
   sessionScope,
 } from "../services/simulation-runtime.js";
+import { updateLearnerCapabilityProfile } from "../services/capability-profile.js";
 
 const sessionIdSchema = z.string().uuid();
 const includeReport = {
@@ -191,6 +192,7 @@ simulationSessionsRouter.post("/:id/evaluate", async (request, response) => {
     );
   const result = buildDeterministicEvaluation(learnerMessages);
   await prisma.$transaction(async (transaction) => {
+    const assessedAt = new Date();
     await transaction.simulationEvaluation.upsert({
       where: { sessionId: session.id },
       create: {
@@ -218,11 +220,18 @@ simulationSessionsRouter.post("/:id/evaluate", async (request, response) => {
         sessionId: session.id,
       })),
     });
+    await updateLearnerCapabilityProfile(transaction, {
+      organizationId,
+      learnerId: session.learnerId,
+      sessionId: session.id,
+      assessedAt,
+      scores: result.capabilityScores,
+    });
     await transaction.simulationSession.update({
       where: { id: session.id },
       data: {
         status: "COMPLETED",
-        completedAt: new Date(),
+        completedAt: assessedAt,
         overallScore: result.overallScore,
       },
     });

@@ -85,6 +85,19 @@ enum OrganizationBlueprintStatus {
   APPROVED
 }
 
+enum CapabilityTrend {
+  NEW
+  IMPROVING
+  STABLE
+  DECLINING
+}
+
+enum CapabilityConfidence {
+  LOW
+  MEDIUM
+  HIGH
+}
+
 enum SimulationDifficulty {
   Beginner
   Intermediate
@@ -127,6 +140,7 @@ model Profile {
   personasCreated       SimulationPersona[] @relation("PersonaCreator")
   criteriaCreated       SimulationEvaluationCriterion[] @relation("CriterionCreator")
   simulationSessions    SimulationSession[] @relation("SessionLearner")
+  capabilityProfiles    LearnerCapabilityProfile[] @relation("CapabilityProfileLearner")
 }
 
 model Organization {
@@ -150,6 +164,7 @@ model Organization {
   simulationPersonas SimulationPersona[]
   evaluationCriteria SimulationEvaluationCriterion[]
   simulationSessions SimulationSession[]
+  capabilityProfiles LearnerCapabilityProfile[]
   blueprint          OrganizationBlueprint?
 
   @@index([createdBy])
@@ -322,10 +337,65 @@ model SimulationSession {
   messages       SimulationMessage[]
   evaluation     SimulationEvaluation?
   capabilityScores CapabilityScore[]
+  capabilityHistory CapabilityAssessmentHistory[]
 
   @@index([organizationId, createdAt])
   @@index([simulationId, status])
   @@index([learnerId, createdAt])
+}
+
+model LearnerCapabilityProfile {
+  id                   String               @id @default(uuid()) @db.Uuid
+  organizationId       String               @db.Uuid
+  learnerId            String               @db.Uuid
+  overallScore         Float
+  previousOverallScore Float?
+  trend                CapabilityTrend      @default(NEW)
+  confidence           CapabilityConfidence @default(LOW)
+  simulationCount      Int                  @default(0)
+  lastAssessedAt       DateTime?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  organization         Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  learner              Profile              @relation("CapabilityProfileLearner", fields: [learnerId], references: [id], onDelete: Cascade)
+  capabilities         LearnerCapability[]
+  history              CapabilityAssessmentHistory[]
+
+  @@unique([organizationId, learnerId])
+  @@index([learnerId, updatedAt])
+}
+
+model LearnerCapability {
+  id              String                   @id @default(uuid()) @db.Uuid
+  profileId       String                   @db.Uuid
+  capabilityName  String
+  currentScore    Float
+  previousScore   Float?
+  change          Float                    @default(0)
+  lastAssessedAt  DateTime
+  assessmentCount Int                      @default(1)
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+  profile         LearnerCapabilityProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, capabilityName])
+  @@index([profileId, currentScore])
+}
+
+model CapabilityAssessmentHistory {
+  id             String                   @id @default(uuid()) @db.Uuid
+  profileId      String                   @db.Uuid
+  sessionId      String                   @db.Uuid
+  capabilityName String
+  currentScore   Float
+  previousScore  Float?
+  change         Float                    @default(0)
+  assessedAt     DateTime                 @default(now())
+  profile        LearnerCapabilityProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  session        SimulationSession        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, capabilityName])
+  @@index([profileId, assessedAt])
 }
 
 model SimulationMessage {

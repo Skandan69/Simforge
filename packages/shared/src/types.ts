@@ -386,3 +386,42 @@ export interface SimulationRunConfiguration {
   status: SimulationStatus;
   persona: { id: string; name: string; role: string; tone: string } | null;
 }
+
+export type CapabilityTrend = "NEW" | "IMPROVING" | "STABLE" | "DECLINING";
+export type CapabilityConfidence = "LOW" | "MEDIUM" | "HIGH";
+
+export interface LearnerCapabilityProfileResponse {
+  profile: {
+    overallScore: number;
+    previousOverallScore: number | null;
+    trend: CapabilityTrend;
+    confidence: CapabilityConfidence;
+    simulationCount: number;
+    lastAssessedAt: string | null;
+    updatedAt: string;
+  };
+  capabilities: Array<{
+    capabilityName: WorkforceCapability;
+    currentScore: number;
+    previousScore: number | null;
+    change: number;
+    lastAssessedAt: string;
+    assessmentCount: number;
+  }>;
+  history: Array<{
+    sessionId: string;
+    capabilityName: WorkforceCapability;
+    currentScore: number;
+    previousScore: number | null;
+    change: number;
+    assessedAt: string;
+  }>;
+  recentSimulations: Array<{
+    id: string;
+    simulationId: string;
+    simulationTitle: string;
+    overallScore: number;
+    completedAt: string;
+  }>;
+  recommendedFocusAreas: WorkforceCapability[];
+}
