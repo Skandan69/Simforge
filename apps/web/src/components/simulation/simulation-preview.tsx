@@ -79,11 +79,11 @@ export function SimulationPreview({ id }: { id: string }) {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            {item.status === "Active" && (
+            {(item.status === "Active" || (item.status === "Draft" && item.canEdit)) && (
               <Button asChild>
-                <Link href={`/simulation-studio/simulations/${item.id}/run`}>
+                <Link href={`/simulation-studio/simulations/${item.id}/run?start=true`}>
                   <Play />
-                  Start simulation
+                  {item.status === "Draft" ? "Start draft simulation" : "Start simulation"}
                 </Link>
               </Button>
             )}
@@ -195,8 +195,11 @@ export function SimulationPreview({ id }: { id: string }) {
         </Card>
       </div>
       <div className="rounded-xl border border-dashed p-5 text-center text-sm text-muted-foreground">
-        Configuration preview. Active simulations can be opened in the Sophia
-        MVP practice experience.
+        {item.status === "Archived"
+          ? "Restore this simulation before starting a new practice session."
+          : item.status === "Draft"
+            ? "Draft testing is available to Owners, Admins, and Trainers. Activate the simulation when it is ready for learners."
+            : "Start a Sophia practice session to complete the scenario and receive an evaluation, coaching guidance, and capability update."}
       </div>
     </div>
   );

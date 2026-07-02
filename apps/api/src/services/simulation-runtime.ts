@@ -1,4 +1,4 @@
-import { WORKFORCE_CAPABILITIES, type UserRole } from "@simforge/shared";
+import { WORKFORCE_CAPABILITIES, type SimulationStatus, type UserRole } from "@simforge/shared";
 
 const capabilityAdjustments = [4, 1, 0, 3, 2, -1] as const;
 
@@ -25,12 +25,22 @@ export function canEvaluateSession(
   );
 }
 
+export function canStartSimulation(role: UserRole, status: SimulationStatus) {
+  return status === "Active" ||
+    (status === "Draft" && (["Owner", "Admin", "Trainer"] as UserRole[]).includes(role));
+}
+
 export function createPlaceholderAiResponse(simulationTitle: string) {
   return `This is the configured ${simulationTitle} practice scenario. I have recorded your response. Please continue with the next action you would take.`;
 }
 
-export function createPlaceholderOpeningMessage(simulationTitle: string) {
-  return `Welcome to ${simulationTitle}. Review the scenario and begin by explaining the first action you would take.`;
+export function createPlaceholderOpeningMessage(
+  simulationTitle: string,
+  personaRole?: string,
+) {
+  return personaRole
+    ? `You are speaking with the ${personaRole} in the ${simulationTitle} scenario. They are waiting for your response. What do you say first?`
+    : `Welcome to ${simulationTitle}. Review the scenario and begin by explaining the first action you would take.`;
 }
 
 export function buildDeterministicEvaluation(learnerMessages: string[]) {

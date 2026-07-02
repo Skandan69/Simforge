@@ -11,6 +11,7 @@ import {
   buildDeterministicEvaluation,
   canEvaluateSession,
   canReadSession,
+  canStartSimulation,
   createPlaceholderAiResponse,
   createPlaceholderOpeningMessage,
   sessionScope,
@@ -61,15 +62,15 @@ async function getSession(id: string, organizationId: string) {
 simulationSessionsRouter.get(
   "/simulations/:simulationId",
   async (request, response) => {
-    const { organizationId } = getWorkspaceRequest(request).workspace;
+    const { organizationId, role } = getWorkspaceRequest(request).workspace;
     const simulationId = z.string().uuid().parse(request.params.simulationId);
     const simulation = await prisma.simulation.findFirst({
-      where: { id: simulationId, organizationId, status: "Active" },
+      where: { id: simulationId, organizationId },
       select: includeReport.simulation.select,
     });
-    if (!simulation)
+    if (!simulation || !canStartSimulation(role, simulation.status))
       throw new HttpError(
-        "Active simulation not found",
+        "Simulation is not available to run",
         404,
         "SIMULATION_NOT_AVAILABLE",
       );
@@ -78,21 +79,27 @@ simulationSessionsRouter.get(
 );
 
 simulationSessionsRouter.post("/", async (request, response) => {
-  const { organizationId } = getWorkspaceRequest(request).workspace;
+  const { organizationId, role } = getWorkspaceRequest(request).workspace;
   const user = getWorkspaceRequest(request).authUser;
   const { simulationId } = z
     .object({ simulationId: z.string().uuid() })
     .parse(request.body);
   const simulation = await prisma.simulation.findFirst({
-    where: { id: simulationId, organizationId, status: "Active" },
-    select: { id: true, title: true },
+    where: { id: simulationId, organizationId },
+    select: { id: true, title: true, status: true, persona: { select: { role: true } } },
   });
-  if (!simulation)
+  if (!simulation || !canStartSimulation(role, simulation.status))
     throw new HttpError(
-      "Active simulation not found",
+      "Simulation is not available to run",
       404,
       "SIMULATION_NOT_AVAILABLE",
     );
+  const openingMessage = await generateSophiaReply({
+    provider: getAIProvider(),
+    systemPrompt: async () => buildSophiaSystemPrompt(await loadSophiaPromptContext({ organizationId, learnerId: user.id, simulationId: simulation.id })),
+    messages: [{ role: "learner", content: "Begin the scenario now in the configured counterpart role. Open with one concise, realistic statement or question for the learner." }],
+    fallback: () => createPlaceholderOpeningMessage(simulation.title, simulation.persona?.role),
+  });
   const session = await prisma.simulationSession.create({
     data: {
       organizationId,
@@ -106,7 +113,7 @@ simulationSessionsRouter.post("/", async (request, response) => {
           },
           {
             role: "ai",
-            content: createPlaceholderOpeningMessage(simulation.title),
+            content: openingMessage,
           },
         ],
       },

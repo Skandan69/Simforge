@@ -32,11 +32,14 @@ interface MessagePair {
 }
 export function SophiaSimulationRun({
   simulationId,
+  autoStart = false,
 }: {
   simulationId: string;
+  autoStart?: boolean;
 }) {
   const router = useRouter();
   const endRef = useRef<HTMLDivElement>(null);
+  const autoStartHandled = useRef(false);
   const [configuration, setConfiguration] =
     useState<SimulationRunConfiguration>();
   const [session, setSession] = useState<SimulationSessionResponse>();
@@ -75,7 +78,7 @@ export function SophiaSimulationRun({
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [conversation.length]);
-  async function start() {
+  const start = useCallback(async () => {
     setStarting(true);
     setError(undefined);
     try {
@@ -95,7 +98,13 @@ export function SophiaSimulationRun({
     } finally {
       setStarting(false);
     }
-  }
+  }, [simulationId]);
+  useEffect(() => {
+    if (!autoStart || !configuration || session || autoStartHandled.current)
+      return;
+    autoStartHandled.current = true;
+    void start();
+  }, [autoStart, configuration, session, start]);
   async function send(event: React.FormEvent) {
     event.preventDefault();
     const value = content.trim();
@@ -132,6 +141,9 @@ export function SophiaSimulationRun({
         `/api/simulation-sessions/${session.id}/evaluate`,
         { method: "POST" },
       );
+      await apiFetch(`/api/simulation-sessions/${session.id}/coach`, {
+        method: "POST",
+      });
       router.push(`/simulation-studio/sessions/${session.id}/report`);
     } catch (caught) {
       setError(
@@ -208,8 +220,8 @@ export function SophiaSimulationRun({
               <div className="flex items-start gap-2 rounded-lg bg-muted/50 p-3 text-xs leading-5">
                 <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" />
                 <span>
-                  This MVP uses structured placeholder responses. Your messages
-                  are saved for the capability report.
+                  Sophia uses the configured simulation persona and organization
+                  context. Your messages are saved for evaluation and coaching.
                 </span>
               </div>
               {configuration.persona && (
@@ -257,7 +269,7 @@ export function SophiaSimulationRun({
                   }
                 >
                   {evaluating ? <Loader2 className="animate-spin" /> : null}
-                  {evaluating ? "Evaluating…" : "End & evaluate"}
+                  {evaluating ? "Finishing…" : "Finish simulation"}
                 </Button>
               )}
             </div>
