@@ -98,6 +98,20 @@ enum CapabilityConfidence {
   HIGH
 }
 
+enum LearningFactoryAssetType {
+  SIMULATION
+  QUESTION_BANK
+  LEARNING_OBJECTIVE
+  COACHING_FOCUS
+}
+
+enum LearningFactoryDraftStatus {
+  DRAFT
+  APPROVED
+  REJECTED
+  PUBLISHED
+}
+
 enum SimulationDifficulty {
   Beginner
   Intermediate
@@ -165,6 +179,7 @@ model Organization {
   evaluationCriteria SimulationEvaluationCriterion[]
   simulationSessions SimulationSession[]
   capabilityProfiles LearnerCapabilityProfile[]
+  learningFactoryDrafts LearningFactoryDraft[]
   blueprint          OrganizationBlueprint?
 
   @@index([createdBy])
@@ -455,10 +470,35 @@ model Document {
   versions        DocumentVersion[]
   knowledgeSource KnowledgeSource?
   knowledgeChunks KnowledgeChunk[]
+  learningFactoryDrafts LearningFactoryDraft[]
 
   @@index([knowledgeBaseId, status])
   @@index([uploadedBy])
   @@index([fileName])
+}
+
+model LearningFactoryDraft {
+  id                 String                     @id @default(uuid()) @db.Uuid
+  organizationId     String                     @db.Uuid
+  sourceDocumentId   String?                    @db.Uuid
+  title              String
+  description        String                     @db.Text
+  assetType          LearningFactoryAssetType
+  status             LearningFactoryDraftStatus @default(DRAFT)
+  generatedFrom      String
+  capabilityMappings Json
+  importance         KnowledgeImportance
+  confidence         Float
+  businessValue      String                     @db.Text
+  payload            Json
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+  organization       Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sourceDocument     Document?                  @relation(fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, assetType, generatedFrom])
+  @@index([organizationId, status, updatedAt])
+  @@index([sourceDocumentId])
 }
 
 model KnowledgeSource {

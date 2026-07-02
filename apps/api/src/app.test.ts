@@ -16,6 +16,7 @@ const { app } = await import("./app.js");
 const { requireKnowledgeWrite, requireSimulationRead, requireSimulationWrite } =
   await import("./middleware/workspace.js");
 const { requireBlueprintWrite } = await import("./routes/organization-blueprint.js");
+const { requireLearningFactoryWrite } = await import("./routes/learning-factory.js");
 const server = app.listen(0);
 await new Promise<void>((resolve) => server.once("listening", resolve));
 const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -102,6 +103,13 @@ test("Sophia conversation and evaluation mutations require authentication", asyn
     "/api/simulation-sessions/00000000-0000-0000-0000-000000000000/evaluate",
   ]) {
     const response = await fetch(`${baseUrl}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    assert.equal(response.status, 401, path);
+  }
+});
+
+test("Learning Factory endpoints require authentication", async () => {
+  for (const [path, method] of [["/api/learning-factory/drafts", "GET"], ["/api/learning-factory/generate", "POST"]] as const) {
+    const response = await fetch(`${baseUrl}${path}`, { method, headers: { "Content-Type": "application/json" }, body: method === "POST" ? "{}" : undefined });
     assert.equal(response.status, 401, path);
   }
 });
@@ -200,4 +208,9 @@ test("only Owners and Admins can change the organization blueprint", () => {
     assert.equal(result.nextCalled, false, role);
     assert.equal(result.status, 403, role);
   }
+});
+
+test("only Owners and Admins can manage Learning Factory drafts", () => {
+  for (const role of ["Owner", "Admin"] as UserRole[]) assert.equal(invokePermission(role, requireLearningFactoryWrite).nextCalled, true, role);
+  for (const role of ["Trainer", "Manager", "Learner"] as UserRole[]) assert.equal(invokePermission(role, requireLearningFactoryWrite).status, 403, role);
 });

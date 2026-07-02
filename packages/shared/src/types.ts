@@ -425,3 +425,34 @@ export interface LearnerCapabilityProfileResponse {
   }>;
   recommendedFocusAreas: WorkforceCapability[];
 }
+
+export type LearningFactoryAssetType = "SIMULATION" | "QUESTION_BANK" | "LEARNING_OBJECTIVE" | "COACHING_FOCUS";
+export type LearningFactoryDraftStatus = "DRAFT" | "APPROVED" | "REJECTED" | "PUBLISHED";
+
+export interface LearningFactoryDraftResponse {
+  id: string;
+  sourceDocumentId: string | null;
+  title: string;
+  description: string;
+  assetType: LearningFactoryAssetType;
+  status: LearningFactoryDraftStatus;
+  generatedFrom: string;
+  capabilityMappings: WorkforceCapability[];
+  importance: KnowledgeImportance;
+  confidence: number;
+  businessValue: string;
+  payload: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LearningFactoryDraftListResponse {
+  canManage: boolean;
+  drafts: LearningFactoryDraftResponse[];
+}
+
+export interface LearningFactoryGenerateResponse {
+  generated: number;
+  skippedDuplicates: number;
+  drafts: LearningFactoryDraftResponse[];
+}

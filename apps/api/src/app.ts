@@ -21,6 +21,7 @@ import {
 } from "./routes/simulations.js";
 import { simulationSessionsRouter } from "./routes/simulation-sessions.js";
 import { capabilityProfileRouter } from "./routes/capability-profile.js";
+import { learningFactoryRouter } from "./routes/learning-factory.js";
 
 export const app = express();
 const env = getEnv();
@@ -74,6 +75,7 @@ app.use("/api/simulation-personas", simulationPersonasRouter);
 app.use("/api/simulation-criteria", simulationCriteriaRouter);
 app.use("/api/simulation-sessions", simulationSessionsRouter);
 app.use("/api/capability-profile", capabilityProfileRouter);
+app.use("/api/learning-factory", learningFactoryRouter);
 
 app.use((_request, response) => {
   response.status(404).json({ error: "Route not found" });
