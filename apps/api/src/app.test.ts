@@ -107,6 +107,14 @@ test("Sophia conversation and evaluation mutations require authentication", asyn
   }
 });
 
+test("AI Coach endpoints require authentication", async () => {
+  const path = "/api/simulation-sessions/00000000-0000-0000-0000-000000000000/coach";
+  for (const method of ["GET", "POST"] as const) {
+    const response = await fetch(`${baseUrl}${path}`, { method, headers: { "Content-Type": "application/json" }, body: method === "POST" ? "{}" : undefined });
+    assert.equal(response.status, 401, method);
+  }
+});
+
 test("Learning Factory endpoints require authentication", async () => {
   for (const [path, method] of [["/api/learning-factory/drafts", "GET"], ["/api/learning-factory/generate", "POST"]] as const) {
     const response = await fetch(`${baseUrl}${path}`, { method, headers: { "Content-Type": "application/json" }, body: method === "POST" ? "{}" : undefined });

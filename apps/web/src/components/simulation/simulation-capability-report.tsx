@@ -15,6 +15,7 @@ import { sortCapabilityScores } from "@/lib/simulation-session";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SimulationCoachingInsight } from "./simulation-coaching-insight";
 
 export function SimulationCapabilityReport({
   sessionId,
@@ -248,6 +249,7 @@ export function SimulationCapabilityReport({
           </CardContent>
         </Card>
       </div>
+      <SimulationCoachingInsight sessionId={session.id} />
       <div className="rounded-xl border border-dashed p-4 text-center text-xs text-muted-foreground">
         Evaluation uses the configured Sophia provider when available, with a
         deterministic fallback to keep the simulation workflow reliable.

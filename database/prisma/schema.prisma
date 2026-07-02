@@ -112,6 +112,11 @@ enum LearningFactoryDraftStatus {
   PUBLISHED
 }
 
+enum CoachingGeneratedBy {
+  DETERMINISTIC
+  AI
+}
+
 enum SimulationDifficulty {
   Beginner
   Intermediate
@@ -155,6 +160,7 @@ model Profile {
   criteriaCreated       SimulationEvaluationCriterion[] @relation("CriterionCreator")
   simulationSessions    SimulationSession[] @relation("SessionLearner")
   capabilityProfiles    LearnerCapabilityProfile[] @relation("CapabilityProfileLearner")
+  coachingInsights      SimulationCoachingInsight[] @relation("CoachingInsightLearner")
 }
 
 model Organization {
@@ -180,6 +186,7 @@ model Organization {
   simulationSessions SimulationSession[]
   capabilityProfiles LearnerCapabilityProfile[]
   learningFactoryDrafts LearningFactoryDraft[]
+  coachingInsights SimulationCoachingInsight[]
   blueprint          OrganizationBlueprint?
 
   @@index([createdBy])
@@ -353,10 +360,33 @@ model SimulationSession {
   evaluation     SimulationEvaluation?
   capabilityScores CapabilityScore[]
   capabilityHistory CapabilityAssessmentHistory[]
+  coachingInsight SimulationCoachingInsight?
 
   @@index([organizationId, createdAt])
   @@index([simulationId, status])
   @@index([learnerId, createdAt])
+}
+
+model SimulationCoachingInsight {
+  id                   String              @id @default(uuid()) @db.Uuid
+  organizationId       String              @db.Uuid
+  sessionId            String              @unique @db.Uuid
+  learnerId            String              @db.Uuid
+  summary              String              @db.Text
+  strengths            Json
+  improvementAreas     Json
+  capabilityChanges    Json
+  knowledgeGaps        Json
+  nextBestAction       Json
+  estimatedImprovement Json
+  generatedBy          CoachingGeneratedBy @default(DETERMINISTIC)
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  organization         Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  session              SimulationSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  learner              Profile             @relation("CoachingInsightLearner", fields: [learnerId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, learnerId, createdAt])
 }
 
 model LearnerCapabilityProfile {

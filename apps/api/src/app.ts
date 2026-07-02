@@ -22,6 +22,7 @@ import {
 import { simulationSessionsRouter } from "./routes/simulation-sessions.js";
 import { capabilityProfileRouter } from "./routes/capability-profile.js";
 import { learningFactoryRouter } from "./routes/learning-factory.js";
+import { simulationCoachingRouter } from "./routes/simulation-coaching.js";
 
 export const app = express();
 const env = getEnv();
@@ -74,6 +75,7 @@ app.use("/api/simulations", simulationsRouter);
 app.use("/api/simulation-personas", simulationPersonasRouter);
 app.use("/api/simulation-criteria", simulationCriteriaRouter);
 app.use("/api/simulation-sessions", simulationSessionsRouter);
+app.use("/api/simulation-sessions", simulationCoachingRouter);
 app.use("/api/capability-profile", capabilityProfileRouter);
 app.use("/api/learning-factory", learningFactoryRouter);
 

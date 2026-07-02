@@ -456,3 +456,21 @@ export interface LearningFactoryGenerateResponse {
   skippedDuplicates: number;
   drafts: LearningFactoryDraftResponse[];
 }
+
+export type CoachingGeneratedBy = "DETERMINISTIC" | "AI";
+
+export interface SimulationCoachingInsightResponse {
+  id: string;
+  sessionId: string;
+  learnerId: string;
+  summary: string;
+  strengths: Array<{ title: string; evidence: string; capability: WorkforceCapability | null }>;
+  improvementAreas: Array<{ title: string; evidence: string; recommendation: string; capability: WorkforceCapability }>;
+  capabilityChanges: Array<{ capability: WorkforceCapability; currentScore: number; previousScore: number | null; change: number }>;
+  knowledgeGaps: Array<{ topic: string; evidence: string; sourceTitle: string | null }>;
+  nextBestAction: { title: string; description: string; capability: WorkforceCapability };
+  estimatedImprovement: { minimumPoints: number; maximumPoints: number; basis: string; disclaimer: string };
+  generatedBy: CoachingGeneratedBy;
+  createdAt: string;
+  updatedAt: string;
+}
