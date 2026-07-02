@@ -23,6 +23,7 @@ import { simulationSessionsRouter } from "./routes/simulation-sessions.js";
 import { capabilityProfileRouter } from "./routes/capability-profile.js";
 import { learningFactoryRouter } from "./routes/learning-factory.js";
 import { simulationCoachingRouter } from "./routes/simulation-coaching.js";
+import { getAIProviderStatus } from "./ai/provider.js";
 
 export const app = express();
 const env = getEnv();
@@ -60,6 +61,7 @@ app.get("/health", (_request, response) => {
   response.status(200).json({
     status: "ok",
     service: API_SERVICE_NAME,
+    ai: getAIProviderStatus(),
   });
 });
 

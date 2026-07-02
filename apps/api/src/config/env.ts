@@ -15,7 +15,7 @@ const envSchema = z.object({
     .min(1, "SUPABASE_SERVICE_ROLE_KEY is required"),
   WEB_URL: z.url().default("http://localhost:3000"),
   FRONTEND_URL: z.url().optional(),
-  AI_PROVIDER: z.enum(["disabled", "openai"]).default("disabled"),
+  AI_PROVIDER: z.enum(["disabled", "openai"]).default("openai"),
   OPENAI_API_KEY: z.preprocess((value) => value === "" ? undefined : value, z.string().min(1).optional()),
   OPENAI_MODEL: z.string().min(1).default("gpt-5.4-mini"),
   OPENAI_BASE_URL: z.url().default("https://api.openai.com/v1"),

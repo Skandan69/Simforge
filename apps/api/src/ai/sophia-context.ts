@@ -6,6 +6,7 @@ export interface SophiaPromptContext {
   organizationBlueprint: null | { industry: string; teamSizeRange: string; primaryTrainingGoals: unknown; priorityCapabilities: unknown; successDefinition: string; costlyMistakes: string; nonNegotiables: string };
   simulation: { title: string; description: string; scenarioSetup: string; successCriteria: string; difficulty: string; objectives: string[]; evaluationCriteria: string[]; persona: null | { name: string; role: string; personality: string; tone: string; difficultyBehavior: string; backgroundContext: string } };
   knowledgeSections: Array<{ title: string; summary: string; sectionType: string; importance: string; confidence: number; keywords: string[]; capabilities: string[] }>;
+  knowledgeDocuments: Array<{ documentName: string; sourceTitle: string; chunkNumber: number; text: string }>;
   learnerProfile: null | { overallScore: number; trend: string; confidence: string; simulationCount: number; capabilities: Array<{ name: string; score: number; change: number }> };
 }
 
@@ -16,16 +17,18 @@ export async function loadSophiaPromptContext(input: { organizationId: string; l
   });
   if (!simulation) throw new Error("Simulation context not found");
   const knowledgeBaseIds = simulation.knowledgeBases.map((link) => link.knowledgeBaseId);
-  const [blueprint, profile, candidates] = await Promise.all([
+  const [blueprint, profile, candidates, documentChunks] = await Promise.all([
     prisma.organizationBlueprint.findFirst({ where: { organizationId: input.organizationId, status: "APPROVED" }, select: { industry: true, teamSizeRange: true, primaryTrainingGoals: true, priorityCapabilities: true, successDefinition: true, costlyMistakes: true, nonNegotiables: true } }),
     prisma.learnerCapabilityProfile.findUnique({ where: { organizationId_learnerId: { organizationId: input.organizationId, learnerId: input.learnerId } }, include: { capabilities: true } }),
     knowledgeBaseIds.length ? prisma.knowledgeIntelligenceSection.findMany({ where: { sectionType: { not: "Unknown" }, confidence: { gte: 0.5 }, source: { organizationId: input.organizationId, document: { knowledgeBaseId: { in: knowledgeBaseIds } } } }, select: { id: true, title: true, summary: true, sectionType: true, importance: true, confidence: true, keywords: true, capabilities: true }, orderBy: { confidence: "desc" }, take: 40 }) : [],
+    knowledgeBaseIds.length ? prisma.knowledgeChunk.findMany({ where: { source: { organizationId: input.organizationId, status: "Completed", document: { knowledgeBaseId: { in: knowledgeBaseIds } } } }, select: { chunkNumber: true, text: true, source: { select: { title: true } }, document: { select: { fileName: true } } }, orderBy: [{ sourceId: "asc" }, { chunkNumber: "asc" }], take: getEnv().AI_KNOWLEDGE_SECTION_LIMIT }) : [],
   ]);
   const query = `${simulation.title} ${simulation.description} ${simulation.scenarioSetup} ${simulation.objectives.map((objective) => objective.title).join(" ")}`;
   return {
     organizationBlueprint: blueprint,
     simulation: { title: simulation.title, description: simulation.description, scenarioSetup: simulation.scenarioSetup, successCriteria: simulation.successCriteria, difficulty: simulation.difficulty, objectives: simulation.objectives.map((objective) => objective.title), evaluationCriteria: simulation.evaluationCriteria.map((link) => link.criterion.name), persona: simulation.persona ? { name: simulation.persona.name, role: simulation.persona.role, personality: simulation.persona.personality, tone: simulation.persona.tone, difficultyBehavior: simulation.persona.difficultyBehavior, backgroundContext: simulation.persona.backgroundContext } : null },
     knowledgeSections: rankKnowledgeSections(candidates, query, getEnv().AI_KNOWLEDGE_SECTION_LIMIT),
+    knowledgeDocuments: documentChunks.map((chunk) => ({ documentName: chunk.document?.fileName ?? chunk.source.title, sourceTitle: chunk.source.title, chunkNumber: chunk.chunkNumber, text: chunk.text })),
     learnerProfile: profile ? { overallScore: profile.overallScore, trend: profile.trend, confidence: profile.confidence, simulationCount: profile.simulationCount, capabilities: profile.capabilities.map((capability) => ({ name: capability.capabilityName, score: capability.currentScore, change: capability.change })) } : null,
   };
 }

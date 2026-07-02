@@ -31,10 +31,12 @@ after(
 test("health endpoint reports the API service", async () => {
   const response = await fetch(`${baseUrl}/health`);
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), {
-    status: "ok",
-    service: "simforge-api",
-  });
+  const body = await response.json() as { status: string; service: string; ai: { provider: string; configured: boolean; reason: string } };
+  assert.equal(body.status, "ok");
+  assert.equal(body.service, "simforge-api");
+  assert.equal(body.ai.configured, body.ai.provider === "openai");
+  assert.equal(["configured", "credentials_missing", "provider_disabled"].includes(body.ai.reason), true);
+  assert.equal(JSON.stringify(body).includes("OPENAI_API_KEY"), false);
 });
 
 test("CORS allows production and local frontends while rejecting unknown origins", async () => {
