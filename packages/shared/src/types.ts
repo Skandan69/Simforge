@@ -63,6 +63,39 @@ export type DocumentStatus = "Ready" | "Archived" | "Failed";
 export type ProcessingStatus =
   "Uploaded" | "Queued" | "Processing" | "Completed" | "Failed" | "Cancelled";
 
+export type KnowledgeSectionType =
+  | "Policy"
+  | "Procedure"
+  | "ProductInformation"
+  | "FAQ"
+  | "BestPractice"
+  | "Compliance"
+  | "GeneralReference"
+  | "Unknown";
+export type KnowledgeImportance = "Critical" | "Important" | "Reference" | "Optional";
+
+export interface KnowledgeIntelligenceSection {
+  id: string;
+  sectionNumber: number;
+  title: string;
+  summary: string;
+  sectionType: KnowledgeSectionType;
+  confidence: number;
+  keywords: string[];
+  importance: KnowledgeImportance;
+  capabilities: Array<WorkforceCapability | "Unknown">;
+  isAiSuggestion: true;
+  analysisVersion: string;
+}
+
+export interface DocumentKnowledgeIntelligenceResponse {
+  documentId: string;
+  sourceId: string;
+  status: ProcessingStatus;
+  generatedAt: string | null;
+  sections: KnowledgeIntelligenceSection[];
+}
+
 export interface ProcessingSummary {
   sourceId: string | null;
   status: ProcessingStatus;

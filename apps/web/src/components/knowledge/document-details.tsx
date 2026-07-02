@@ -56,6 +56,7 @@ import {
 } from "@/components/ui/dialog";
 import { FormMessage } from "@/components/auth/form-message";
 import { ProcessingStatusBadge } from "./processing-status";
+import { KnowledgeIntelligencePanel } from "./knowledge-intelligence-panel";
 
 export function DocumentDetails({ id }: { id: string }) {
   const router = useRouter();
@@ -314,6 +315,7 @@ export function DocumentDetails({ id }: { id: string }) {
           </div>
         )}
       </section>
+      <KnowledgeIntelligencePanel documentId={document.id} processingStatus={document.processing.status} />
       <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
         <Card>
           <CardHeader>

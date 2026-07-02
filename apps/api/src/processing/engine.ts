@@ -1,6 +1,7 @@
 import type { DocumentFileType } from "@simforge/shared";
 import { prisma } from "../lib/prisma.js";
 import { downloadKnowledgeFile } from "../services/storage.js";
+import { analyzeKnowledge } from "../knowledge-intelligence/service.js";
 import { chunkText, estimateTokens } from "./chunker.js";
 import { detectLanguage, getExtractor } from "./extractors.js";
 
@@ -42,14 +43,17 @@ export class KnowledgeProcessingEngine {
       if (!text) throw new Error("No extractable text was found in this source");
       await this.assertNotCancelled(job.id); await this.progress(job.id, source.id, 70);
       const chunks = chunkText(text);
+      const intelligenceSections = analyzeKnowledge(text);
       const duration = Date.now() - started;
       await prisma.$transaction([
         prisma.knowledgeChunk.deleteMany({ where: { sourceId: source.id } }),
+        prisma.knowledgeIntelligenceSection.deleteMany({ where: { sourceId: source.id } }),
         prisma.knowledgeChunk.createMany({ data: chunks.map((chunk) => ({ ...chunk, sourceId: source.id, documentId: document.id, metadata: { ...chunk.metadata, sourceType: source.sourceType, fileName: document.fileName } })) }),
+        prisma.knowledgeIntelligenceSection.createMany({ data: intelligenceSections.map((section) => ({ ...section, sourceId: source.id })) }),
         prisma.knowledgeSource.update({ where: { id: source.id }, data: { title: extracted.title ?? source.title, status: "Completed", progress: 100, extractedText: text, pageCount: extracted.unitCount, wordCount: words(text), characterCount: text.length, estimatedTokens: estimateTokens(text), language: detectLanguage(text), processingDurationMs: duration, processedAt: new Date(), failureReason: null } }),
         prisma.processingJob.update({ where: { id: job.id }, data: { status: "Completed", progress: 100, completedAt: new Date(), durationMs: duration, failureReason: null, errorMessage: null } }),
       ]);
-      await this.log(source.id, job.id, "completed", `Processing completed with ${chunks.length} chunks`);
+      await this.log(source.id, job.id, "completed", `Processing completed with ${chunks.length} chunks and ${intelligenceSections.length} intelligence suggestions`);
     } catch (error) {
       const cancelled = error instanceof Error && error.message === "PROCESSING_CANCELLED"; const message = error instanceof Error ? error.message : "Unknown processing failure";
       const status = cancelled ? "Cancelled" : "Failed"; const duration = Date.now() - started;

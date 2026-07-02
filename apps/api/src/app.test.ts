@@ -63,6 +63,7 @@ test("Knowledge Studio endpoints require authentication", async () => {
     "/api/knowledge-search?q=policy",
     "/api/processing/dashboard",
     "/api/processing/documents/00000000-0000-0000-0000-000000000000/status",
+    "/api/documents/00000000-0000-0000-0000-000000000000/intelligence",
   ]) {
     const response = await fetch(`${baseUrl}${path}`);
     assert.equal(response.status, 401, path);

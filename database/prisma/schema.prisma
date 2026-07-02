@@ -62,6 +62,24 @@ enum ProcessingLogLevel {
   Error
 }
 
+enum KnowledgeSectionType {
+  Policy
+  Procedure
+  ProductInformation
+  FAQ
+  BestPractice
+  Compliance
+  GeneralReference
+  Unknown
+}
+
+enum KnowledgeImportance {
+  Critical
+  Important
+  Reference
+  Optional
+}
+
 enum SimulationDifficulty {
   Beginner
   Intermediate
@@ -374,9 +392,31 @@ model KnowledgeSource {
   jobs                 ProcessingJob[]
   chunks               KnowledgeChunk[]
   logs                 ProcessingLog[]
+  intelligenceSections KnowledgeIntelligenceSection[]
 
   @@index([organizationId, status])
   @@index([sourceType])
+}
+
+model KnowledgeIntelligenceSection {
+  id             String              @id @default(uuid()) @db.Uuid
+  sourceId       String              @db.Uuid
+  sectionNumber  Int
+  title          String
+  summary        String              @db.Text
+  sectionType    KnowledgeSectionType
+  confidence     Float
+  keywords       String[]
+  importance     KnowledgeImportance
+  capabilities   String[]
+  isAiSuggestion Boolean             @default(true)
+  analysisVersion String             @default("heuristic-v0.1")
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  source         KnowledgeSource     @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, sectionNumber])
+  @@index([sourceId, sectionType])
 }
 
 model ProcessingJob {

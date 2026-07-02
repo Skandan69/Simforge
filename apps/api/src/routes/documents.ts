@@ -127,6 +127,35 @@ documentsRouter.get("/:id", async (request, response) => {
   response.json(documentDetail(document, ["Owner", "Admin", "Trainer"].includes(role)));
 });
 
+documentsRouter.get("/:id/intelligence", async (request, response) => {
+  const { organizationId } = getWorkspaceRequest(request).workspace;
+  const id = z.string().uuid().parse(request.params.id);
+  const source = await prisma.knowledgeSource.findFirst({
+    where: { documentId: id, organizationId },
+    include: { intelligenceSections: { orderBy: { sectionNumber: "asc" } } },
+  });
+  if (!source) throw new HttpError("Processing source not found", 404);
+  response.json({
+    documentId: id,
+    sourceId: source.id,
+    status: source.status,
+    generatedAt: source.intelligenceSections.at(-1)?.createdAt.toISOString() ?? null,
+    sections: source.intelligenceSections.map((section) => ({
+      id: section.id,
+      sectionNumber: section.sectionNumber,
+      title: section.title,
+      summary: section.summary,
+      sectionType: section.sectionType,
+      confidence: section.confidence,
+      keywords: section.keywords,
+      importance: section.importance,
+      capabilities: section.capabilities,
+      isAiSuggestion: true,
+      analysisVersion: section.analysisVersion,
+    })),
+  });
+});
+
 documentsRouter.put("/:id", requireKnowledgeWrite, async (request, response) => {
   const { organizationId } = getWorkspaceRequest(request).workspace;
   const id = z.string().uuid().parse(request.params.id);
