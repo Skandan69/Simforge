@@ -16,4 +16,9 @@ export function scopedSimulationMutation(id: string, organizationId: string) {
   return { where: { id, organizationId } };
 }
 
+export function isKnowledgeBaseSelectionValid(selectedIds: string[], matchedActiveCount: number, availableActiveCount: number) {
+  const selectedCount = new Set(selectedIds).size;
+  return selectedCount ? matchedActiveCount === selectedCount : availableActiveCount === 0;
+}
+
 export const archiveSimulationData = { status: "Archived" as const };

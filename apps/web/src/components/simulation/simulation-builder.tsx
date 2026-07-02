@@ -162,7 +162,7 @@ export function SimulationBuilder({ id }: { id?: string }) {
         !value.successCriteria.trim())
     )
       return "Complete all basic scenario fields.";
-    if (step === 1 && !value.knowledgeBaseIds.length)
+    if (step === 1 && bases.length > 0 && !value.knowledgeBaseIds.length)
       return "Select at least one active knowledge base.";
     if (step === 3 && !value.objectives.some((item) => item.trim()))
       return "Add at least one objective.";
@@ -378,6 +378,7 @@ export function SimulationBuilder({ id }: { id?: string }) {
               title="Connect company knowledge"
               description="Choose the active knowledge bases trainers expect this simulation to draw from."
               empty={!bases.length}
+              emptyDescription="No reusable knowledge bases are available yet. You can continue without company knowledge or upload reusable knowledge later."
             >
               {bases.map((item) => (
                 <Choice
@@ -549,11 +550,13 @@ function SelectionEmpty({
   title,
   description,
   empty,
+  emptyDescription,
   children,
 }: {
   title: string;
   description: string;
   empty: boolean;
+  emptyDescription?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -564,8 +567,8 @@ function SelectionEmpty({
       </div>
       {empty ? (
         <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-          Nothing is available yet. You can continue and return after creating
-          reusable resources.
+          {emptyDescription ??
+            "Nothing is available yet. You can continue and return after creating reusable resources."}
         </div>
       ) : (
         <div className="grid gap-3 md:grid-cols-2">{children}</div>

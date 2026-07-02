@@ -17,7 +17,7 @@ import {
   requireSimulationWrite,
   requireWorkspace,
 } from "../middleware/workspace.js";
-import { archiveSimulationData, duplicateSimulationIdentity, scopedSimulationMutation, simulationRelations } from "../services/simulation-config.js";
+import { archiveSimulationData, duplicateSimulationIdentity, isKnowledgeBaseSelectionValid, scopedSimulationMutation, simulationRelations } from "../services/simulation-config.js";
 
 const saveSchema = z.object({
   title: z.string().trim().min(3).max(160),
@@ -33,7 +33,7 @@ const saveSchema = z.object({
   scenarioSetup: z.string().trim().min(10).max(10000),
   successCriteria: z.string().trim().min(5).max(5000),
   objectives: z.array(z.string().trim().min(2).max(300)).min(1).max(30),
-  knowledgeBaseIds: z.array(z.string().uuid()).min(1).max(20),
+  knowledgeBaseIds: z.array(z.string().uuid()).max(20),
   criterionIds: z.array(z.string().uuid()).min(1).max(30),
 }) satisfies z.ZodType<SaveSimulationInput>;
 
@@ -102,7 +102,7 @@ async function validateLinks(
   input: SaveSimulationInput,
   organizationId: string,
 ) {
-  const [personas, bases, criteria] = await Promise.all([
+  const [personas, bases, activeBases, criteria] = await Promise.all([
     input.personaId
       ? prisma.simulationPersona.count({
           where: { id: input.personaId, organizationId },
@@ -115,13 +115,16 @@ async function validateLinks(
         status: "Active",
       },
     }),
+    prisma.knowledgeBase.count({
+      where: { organizationId, status: "Active" },
+    }),
     prisma.simulationEvaluationCriterion.count({
       where: { id: { in: input.criterionIds }, organizationId },
     }),
   ]);
   if (
     !personas ||
-    bases !== new Set(input.knowledgeBaseIds).size ||
+    !isKnowledgeBaseSelectionValid(input.knowledgeBaseIds, bases, activeBases) ||
     criteria !== new Set(input.criterionIds).size
   )
     throw new HttpError(
