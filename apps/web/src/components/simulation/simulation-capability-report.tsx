@@ -249,8 +249,8 @@ export function SimulationCapabilityReport({
         </Card>
       </div>
       <div className="rounded-xl border border-dashed p-4 text-center text-xs text-muted-foreground">
-        MVP evaluation is deterministic and intended for workflow validation.
-        Production AI evaluation will replace this scoring adapter.
+        Evaluation uses the configured Sophia provider when available, with a
+        deterministic fallback to keep the simulation workflow reliable.
       </div>
     </div>
   );

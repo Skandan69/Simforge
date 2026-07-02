@@ -16,6 +16,12 @@ import {
   sessionScope,
 } from "../services/simulation-runtime.js";
 import { updateLearnerCapabilityProfile } from "../services/capability-profile.js";
+import { getEnv } from "../config/env.js";
+import { getAIProvider } from "../ai/provider.js";
+import { buildSophiaSystemPrompt } from "../ai/prompt-builder.js";
+import { loadSophiaPromptContext } from "../ai/sophia-context.js";
+import { generateSophiaEvaluation, generateSophiaReply } from "../ai/sophia-service.js";
+import type { AIConversationMessage } from "../ai/types.js";
 
 const sessionIdSchema = z.string().uuid();
 const includeReport = {
@@ -146,20 +152,21 @@ simulationSessionsRouter.post("/:id/messages", async (request, response) => {
       409,
       "SESSION_NOT_ACTIVE",
     );
-  const messages = await prisma.$transaction(async (transaction) => {
-    const learnerMessage = await transaction.simulationMessage.create({
-      data: { sessionId: session.id, role: "learner", content },
-    });
-    const aiMessage = await transaction.simulationMessage.create({
-      data: {
-        sessionId: session.id,
-        role: "ai",
-        content: createPlaceholderAiResponse(session.simulation.title),
-      },
-    });
-    return { learnerMessage, aiMessage };
+  if (session.messages.length >= getEnv().AI_SESSION_MESSAGE_LIMIT)
+    throw new HttpError("This simulation has reached its conversation limit. End the simulation to generate your report.", 409, "SESSION_MESSAGE_LIMIT");
+  const learnerMessage = await prisma.simulationMessage.create({ data: { sessionId: session.id, role: "learner", content } });
+  const history: AIConversationMessage[] = [...session.messages, learnerMessage]
+    .filter((message): message is typeof message & { role: "learner" | "ai" } => message.role === "learner" || message.role === "ai")
+    .slice(-getEnv().AI_HISTORY_LIMIT)
+    .map((message) => ({ role: message.role, content: message.content }));
+  const aiContent = await generateSophiaReply({
+    provider: getAIProvider(),
+    systemPrompt: async () => buildSophiaSystemPrompt(await loadSophiaPromptContext({ organizationId, learnerId: session.learnerId, simulationId: session.simulationId })),
+    messages: history,
+    fallback: () => createPlaceholderAiResponse(session.simulation.title),
   });
-  response.status(201).json(messages);
+  const aiMessage = await prisma.simulationMessage.create({ data: { sessionId: session.id, role: "ai", content: aiContent } });
+  response.status(201).json({ learnerMessage, aiMessage });
 });
 
 simulationSessionsRouter.post("/:id/evaluate", async (request, response) => {
@@ -190,7 +197,16 @@ simulationSessionsRouter.post("/:id/evaluate", async (request, response) => {
       409,
       "NO_LEARNER_MESSAGES",
     );
-  const result = buildDeterministicEvaluation(learnerMessages);
+  const transcript: AIConversationMessage[] = session.messages
+    .filter((message): message is typeof message & { role: "learner" | "ai" } => message.role === "learner" || message.role === "ai")
+    .slice(-getEnv().AI_HISTORY_LIMIT)
+    .map((message) => ({ role: message.role, content: message.content }));
+  const result = await generateSophiaEvaluation({
+    provider: getAIProvider(),
+    systemPrompt: async () => buildSophiaSystemPrompt(await loadSophiaPromptContext({ organizationId, learnerId: session.learnerId, simulationId: session.simulationId })),
+    transcript,
+    fallback: () => buildDeterministicEvaluation(learnerMessages),
+  });
   await prisma.$transaction(async (transaction) => {
     const assessedAt = new Date();
     await transaction.simulationEvaluation.upsert({

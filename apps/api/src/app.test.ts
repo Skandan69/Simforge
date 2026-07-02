@@ -96,6 +96,16 @@ test("Sophia simulation session endpoints require authentication", async () => {
   }
 });
 
+test("Sophia conversation and evaluation mutations require authentication", async () => {
+  for (const path of [
+    "/api/simulation-sessions/00000000-0000-0000-0000-000000000000/messages",
+    "/api/simulation-sessions/00000000-0000-0000-0000-000000000000/evaluate",
+  ]) {
+    const response = await fetch(`${baseUrl}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    assert.equal(response.status, 401, path);
+  }
+});
+
 function authorize(role: UserRole) {
   let status = 200;
   let body: unknown;
