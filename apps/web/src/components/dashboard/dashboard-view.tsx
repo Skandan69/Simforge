@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { BookOpen, BrainCircuit, CheckCircle2, ClipboardCheck, ClipboardPenLine, Gauge, Plus, RefreshCw, UserPlus, Users } from "lucide-react";
+import { BookOpen, BookOpenCheck, BrainCircuit, CheckCircle2, ClipboardCheck, ClipboardPenLine, Gauge, Plus, RefreshCw, UserPlus, Users } from "lucide-react";
 import type { DashboardResponse } from "@simforge/shared";
 import { ApiError, apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -77,6 +77,13 @@ export function DashboardView() {
             <div><h2 className="font-semibold">{data.blueprint?.status === "APPROVED" ? "Organization Blueprint ready" : "Set up your Organization Blueprint"}</h2><p className="mt-1 text-sm text-muted-foreground">{data.blueprint?.status === "APPROVED" ? "Review the outcomes and capability priorities guiding your workspace." : "Define the workforce outcomes and priorities that matter most to your organization."}</p></div>
           </div>
           <Button asChild variant={data.blueprint?.status === "APPROVED" ? "outline" : "default"}><Link href="/onboarding/blueprint">{data.blueprint?.status === "APPROVED" ? "Review blueprint" : data.blueprint ? "Continue setup" : "Start setup"}</Link></Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><BookOpenCheck className="size-5" /></span><div><h2 className="font-semibold">Learn how SimForge works</h2><p className="mt-1 text-sm text-muted-foreground">Understand the product workflow, core foundations, and 15-minute demo narrative.</p></div></div>
+          <Button asChild variant="outline"><Link href="/experience-center">Open Experience Center</Link></Button>
         </CardContent>
       </Card>
 
