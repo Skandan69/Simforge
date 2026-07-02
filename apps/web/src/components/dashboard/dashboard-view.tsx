@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { BookOpen, BrainCircuit, ClipboardCheck, Plus, RefreshCw, UserPlus, Users } from "lucide-react";
+import { BookOpen, BrainCircuit, CheckCircle2, ClipboardCheck, ClipboardPenLine, Plus, RefreshCw, UserPlus, Users } from "lucide-react";
 import type { DashboardResponse } from "@simforge/shared";
 import { ApiError, apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -68,6 +68,16 @@ export function DashboardView() {
         <div className="absolute inset-y-0 right-0 hidden w-2/5 bg-[radial-gradient(circle_at_center,rgba(99,102,241,0.17),transparent_65%)] sm:block" />
         <div className="relative"><p className="text-sm font-medium text-primary">{data.organization.name}</p><h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Welcome to your workspace</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">Your SimForge foundation is ready. Start by inviting your team or reviewing the studios prepared for upcoming sprints.</p><div className="mt-5 flex items-center gap-2"><span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">{data.role}</span><span className="text-xs text-muted-foreground">{data.organization.industry} · {data.organization.companySize} employees</span></div></div>
       </section>
+
+      <Card className={data.blueprint?.status === "APPROVED" ? "border-emerald-500/30" : "border-primary/30"}>
+        <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex gap-3">
+            <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${data.blueprint?.status === "APPROVED" ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-primary/10 text-primary"}`}>{data.blueprint?.status === "APPROVED" ? <CheckCircle2 className="size-5" /> : <ClipboardPenLine className="size-5" />}</span>
+            <div><h2 className="font-semibold">{data.blueprint?.status === "APPROVED" ? "Organization Blueprint ready" : "Set up your Organization Blueprint"}</h2><p className="mt-1 text-sm text-muted-foreground">{data.blueprint?.status === "APPROVED" ? "Review the outcomes and capability priorities guiding your workspace." : "Define the workforce outcomes and priorities that matter most to your organization."}</p></div>
+          </div>
+          <Button asChild variant={data.blueprint?.status === "APPROVED" ? "outline" : "default"}><Link href="/onboarding/blueprint">{data.blueprint?.status === "APPROVED" ? "Review blueprint" : data.blueprint ? "Continue setup" : "Start setup"}</Link></Button>
+        </CardContent>
+      </Card>
 
       <section><PageHeading eyebrow="Overview" title="Workspace pulse" description="A clear view of the people and learning assets in your organization." /><div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{kpiConfig.map(({ key, label, icon: Icon, tone }) => <Card key={key} className="transition-shadow hover:shadow-md"><CardContent className="p-5"><div className="flex items-start justify-between"><div><p className="text-sm font-medium text-muted-foreground">{label}</p><p className="mt-3 text-3xl font-semibold tracking-tight">{data.kpis[key].toLocaleString()}</p></div><span className={`grid size-10 place-items-center rounded-xl ${tone}`}><Icon className="size-5" /></span></div><p className="mt-4 text-xs text-muted-foreground">Across this workspace</p></CardContent></Card>)}</div></section>
 

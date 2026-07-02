@@ -46,6 +46,32 @@ export interface DashboardResponse {
     assessments: number;
   };
   recentActivity: DashboardActivity[];
+  blueprint: { status: OrganizationBlueprintStatus; updatedAt: string } | null;
+}
+
+export type OrganizationBlueprintStatus = "DRAFT" | "APPROVED";
+export type CapabilityPriority = "High" | "Medium" | "Low";
+
+export interface OrganizationBlueprintInput {
+  industry: string;
+  teamSizeRange: string;
+  primaryTrainingGoals: string[];
+  priorityCapabilities: Array<{
+    capability: WorkforceCapability;
+    priority: CapabilityPriority;
+  }>;
+  criticalDocumentsNotes: string;
+  successDefinition: string;
+  costlyMistakes: string;
+  nonNegotiables: string;
+}
+
+export interface OrganizationBlueprintResponse extends OrganizationBlueprintInput {
+  id: string;
+  organizationId: string;
+  status: OrganizationBlueprintStatus;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface CreateOrganizationInput {

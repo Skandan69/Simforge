@@ -80,6 +80,11 @@ enum KnowledgeImportance {
   Optional
 }
 
+enum OrganizationBlueprintStatus {
+  DRAFT
+  APPROVED
+}
+
 enum SimulationDifficulty {
   Beginner
   Intermediate
@@ -145,8 +150,28 @@ model Organization {
   simulationPersonas SimulationPersona[]
   evaluationCriteria SimulationEvaluationCriterion[]
   simulationSessions SimulationSession[]
+  blueprint          OrganizationBlueprint?
 
   @@index([createdBy])
+}
+
+model OrganizationBlueprint {
+  id                     String                      @id @default(uuid()) @db.Uuid
+  organizationId         String                      @unique @db.Uuid
+  industry               String
+  teamSizeRange          String
+  primaryTrainingGoals   Json
+  priorityCapabilities   Json
+  criticalDocumentsNotes String                      @default("") @db.Text
+  successDefinition      String                      @default("") @db.Text
+  costlyMistakes         String                      @default("") @db.Text
+  nonNegotiables         String                      @default("") @db.Text
+  status                 OrganizationBlueprintStatus @default(DRAFT)
+  createdAt              DateTime                    @default(now())
+  updatedAt              DateTime                    @updatedAt
+  organization           Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([status])
 }
 
 model KnowledgeBase {

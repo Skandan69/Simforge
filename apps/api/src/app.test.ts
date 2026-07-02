@@ -15,6 +15,7 @@ process.env.FRONTEND_URL = "https://simforge-web-pi.vercel.app";
 const { app } = await import("./app.js");
 const { requireKnowledgeWrite, requireSimulationRead, requireSimulationWrite } =
   await import("./middleware/workspace.js");
+const { requireBlueprintWrite } = await import("./routes/organization-blueprint.js");
 const server = app.listen(0);
 await new Promise<void>((resolve) => server.once("listening", resolve));
 const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -64,6 +65,7 @@ test("Knowledge Studio endpoints require authentication", async () => {
     "/api/processing/dashboard",
     "/api/processing/documents/00000000-0000-0000-0000-000000000000/status",
     "/api/documents/00000000-0000-0000-0000-000000000000/intelligence",
+    "/api/organization-blueprint",
   ]) {
     const response = await fetch(`${baseUrl}${path}`);
     assert.equal(response.status, 401, path);
@@ -176,4 +178,15 @@ test("Simulation Studio permissions allow trainers, keep managers read-only, and
   assert.equal(invokePermission("Manager", requireSimulationWrite).status, 403);
   assert.equal(invokePermission("Learner", requireSimulationRead).status, 403);
   assert.equal(invokePermission("Learner", requireSimulationWrite).status, 403);
+});
+
+test("only Owners and Admins can change the organization blueprint", () => {
+  for (const role of ["Owner", "Admin"] as UserRole[]) {
+    assert.equal(invokePermission(role, requireBlueprintWrite).nextCalled, true, role);
+  }
+  for (const role of ["Trainer", "Manager", "Learner"] as UserRole[]) {
+    const result = invokePermission(role, requireBlueprintWrite);
+    assert.equal(result.nextCalled, false, role);
+    assert.equal(result.status, 403, role);
+  }
 });

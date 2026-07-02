@@ -22,13 +22,13 @@ dashboardRouter.get("/", requireAuth, async (request, response) => {
     return;
   }
 
-  const [users, knowledgeBases, activities]: [number, number, Array<{
+  const [users, knowledgeBases, activities, blueprint]: [number, number, Array<{
     id: string;
     action: string;
     description: string;
     createdAt: Date;
     actor: { fullName: string | null; email: string } | null;
-  }>] = await Promise.all([
+  }>, { status: "DRAFT" | "APPROVED"; updatedAt: Date } | null] = await Promise.all([
     prisma.membership.count({ where: { organizationId: membership.organizationId } }),
     prisma.knowledgeBase.count({ where: { organizationId: membership.organizationId, status: "Active" } }),
     prisma.activity.findMany({
@@ -37,6 +37,7 @@ dashboardRouter.get("/", requireAuth, async (request, response) => {
       orderBy: { createdAt: "desc" },
       include: { actor: { select: { fullName: true, email: true } } },
     }),
+    prisma.organizationBlueprint.findUnique({ where: { organizationId: membership.organizationId }, select: { status: true, updatedAt: true } }),
   ]);
 
   const payload: DashboardResponse = {
@@ -55,6 +56,7 @@ dashboardRouter.get("/", requireAuth, async (request, response) => {
       createdAt: activity.createdAt.toISOString(),
       actorName: activity.actor?.fullName ?? activity.actor?.email ?? "System",
     })),
+    blueprint: blueprint ? { status: blueprint.status, updatedAt: blueprint.updatedAt.toISOString() } : null,
   };
 
   response.json(payload);
