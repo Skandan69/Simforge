@@ -7,6 +7,7 @@ import {
   Clock3,
   FilePenLine,
   Loader2,
+  Play,
   Target,
   UserRound,
 } from "lucide-react";
@@ -77,14 +78,24 @@ export function SimulationPreview({ id }: { id: string }) {
               </span>
             </div>
           </div>
-          {item.canEdit && (
-            <Button asChild>
-              <Link href={`/simulation-studio/simulations/${item.id}/edit`}>
-                <FilePenLine />
-                Edit simulation
-              </Link>
-            </Button>
-          )}
+          <div className="flex flex-wrap gap-2">
+            {item.status === "Active" && (
+              <Button asChild>
+                <Link href={`/simulation-studio/simulations/${item.id}/run`}>
+                  <Play />
+                  Start simulation
+                </Link>
+              </Button>
+            )}
+            {item.canEdit && (
+              <Button asChild variant="outline">
+                <Link href={`/simulation-studio/simulations/${item.id}/edit`}>
+                  <FilePenLine />
+                  Edit simulation
+                </Link>
+              </Button>
+            )}
+          </div>
         </div>
       </section>
       <div className="grid gap-6 lg:grid-cols-2">
@@ -184,8 +195,8 @@ export function SimulationPreview({ id }: { id: string }) {
         </Card>
       </div>
       <div className="rounded-xl border border-dashed p-5 text-center text-sm text-muted-foreground">
-        Preview only. Live conversations, scoring, coaching, and learner
-        attempts are intentionally not enabled.
+        Configuration preview. Active simulations can be opened in the Sophia
+        MVP practice experience.
       </div>
     </div>
   );

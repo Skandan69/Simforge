@@ -20,6 +20,12 @@ const items = [
 ];
 export function SimulationShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const learnerExperience =
+    pathname.includes("/run") || pathname.includes("/sessions/");
+  if (learnerExperience)
+    return (
+      <section className="mx-auto min-w-0 max-w-[1500px]">{children}</section>
+    );
   return (
     <div className="mx-auto grid max-w-[1500px] gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
       <aside className="lg:sticky lg:top-24 lg:h-fit">

@@ -312,7 +312,18 @@ export interface SimulationSessionResponse {
   overallScore: number | null;
   createdAt: string;
   updatedAt: string;
+  simulation: SimulationRunConfiguration;
   messages: SimulationMessageResponse[];
   evaluation: SimulationEvaluationResponse | null;
   capabilityScores: CapabilityScoreResponse[];
+}
+
+export interface SimulationRunConfiguration {
+  id: string;
+  title: string;
+  description: string;
+  scenarioSetup: string;
+  estimatedMinutes: number;
+  status: SimulationStatus;
+  persona: { id: string; name: string; role: string; tone: string } | null;
 }

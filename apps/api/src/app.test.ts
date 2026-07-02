@@ -85,6 +85,7 @@ test("Sophia simulation session endpoints require authentication", async () => {
   for (const path of [
     "/api/simulation-sessions",
     "/api/simulation-sessions/00000000-0000-0000-0000-000000000000",
+    "/api/simulation-sessions/simulations/00000000-0000-0000-0000-000000000000",
   ]) {
     const response = await fetch(`${baseUrl}${path}`);
     assert.equal(response.status, 401, path);

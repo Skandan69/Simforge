@@ -12,12 +12,23 @@ import {
   canEvaluateSession,
   canReadSession,
   createPlaceholderAiResponse,
+  createPlaceholderOpeningMessage,
   sessionScope,
 } from "../services/simulation-runtime.js";
 
 const sessionIdSchema = z.string().uuid();
 const includeReport = {
-  simulation: { select: { id: true, title: true, status: true } },
+  simulation: {
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      scenarioSetup: true,
+      estimatedMinutes: true,
+      status: true,
+      persona: { select: { id: true, name: true, role: true, tone: true } },
+    },
+  },
   messages: { orderBy: { createdAt: "asc" as const } },
   evaluation: true,
   capabilityScores: { orderBy: { capabilityName: "asc" as const } },
@@ -39,6 +50,25 @@ async function getSession(id: string, organizationId: string) {
     );
   return session;
 }
+
+simulationSessionsRouter.get(
+  "/simulations/:simulationId",
+  async (request, response) => {
+    const { organizationId } = getWorkspaceRequest(request).workspace;
+    const simulationId = z.string().uuid().parse(request.params.simulationId);
+    const simulation = await prisma.simulation.findFirst({
+      where: { id: simulationId, organizationId, status: "Active" },
+      select: includeReport.simulation.select,
+    });
+    if (!simulation)
+      throw new HttpError(
+        "Active simulation not found",
+        404,
+        "SIMULATION_NOT_AVAILABLE",
+      );
+    response.json(simulation);
+  },
+);
 
 simulationSessionsRouter.post("/", async (request, response) => {
   const { organizationId } = getWorkspaceRequest(request).workspace;
@@ -62,10 +92,16 @@ simulationSessionsRouter.post("/", async (request, response) => {
       simulationId: simulation.id,
       learnerId: user.id,
       messages: {
-        create: {
-          role: "system",
-          content: `Simulation session started for ${simulation.title}.`,
-        },
+        create: [
+          {
+            role: "system",
+            content: `Simulation session started for ${simulation.title}.`,
+          },
+          {
+            role: "ai",
+            content: createPlaceholderOpeningMessage(simulation.title),
+          },
+        ],
       },
     },
     include: includeReport,

@@ -6,6 +6,7 @@ import {
   canEvaluateSession,
   canReadSession,
   createPlaceholderAiResponse,
+  createPlaceholderOpeningMessage,
   sessionScope,
 } from "./simulation-runtime.js";
 
@@ -47,6 +48,10 @@ test("deterministic evaluation produces all v1 capabilities and bounded scores",
 test("placeholder response is deterministic and scenario-specific", () => {
   assert.match(
     createPlaceholderAiResponse("Billing escalation"),
+    /Billing escalation/,
+  );
+  assert.match(
+    createPlaceholderOpeningMessage("Billing escalation"),
     /Billing escalation/,
   );
 });

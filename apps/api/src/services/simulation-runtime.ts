@@ -29,6 +29,10 @@ export function createPlaceholderAiResponse(simulationTitle: string) {
   return `This is the configured ${simulationTitle} practice scenario. I have recorded your response. Please continue with the next action you would take.`;
 }
 
+export function createPlaceholderOpeningMessage(simulationTitle: string) {
+  return `Welcome to ${simulationTitle}. Review the scenario and begin by explaining the first action you would take.`;
+}
+
 export function buildDeterministicEvaluation(learnerMessages: string[]) {
   const combined = learnerMessages.join(" ").trim();
   const wordCount = combined ? combined.split(/\s+/u).length : 0;
