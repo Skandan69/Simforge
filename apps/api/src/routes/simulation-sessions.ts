@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { raw, Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { HttpError } from "../lib/http-error.js";
@@ -23,6 +23,7 @@ import { buildSophiaSystemPrompt } from "../ai/prompt-builder.js";
 import { loadSophiaPromptContext } from "../ai/sophia-context.js";
 import { generateSophiaEvaluation, generateSophiaReply } from "../ai/sophia-service.js";
 import type { AIConversationMessage } from "../ai/types.js";
+import { getVoiceProviders } from "../ai/voice-provider.js";
 
 const sessionIdSchema = z.string().uuid();
 const includeReport = {
@@ -174,6 +175,57 @@ simulationSessionsRouter.post("/:id/messages", async (request, response) => {
   });
   const aiMessage = await prisma.simulationMessage.create({ data: { sessionId: session.id, role: "ai", content: aiContent } });
   response.status(201).json({ learnerMessage, aiMessage });
+});
+
+const audioTypes = new Set(["audio/webm", "audio/ogg", "audio/mp4", "audio/mpeg", "audio/wav", "audio/x-wav"]);
+const audioExtension = (mimeType: string) => mimeType.includes("ogg") ? "ogg" : mimeType.includes("mp4") ? "m4a" : mimeType.includes("mpeg") ? "mp3" : mimeType.includes("wav") ? "wav" : "webm";
+
+simulationSessionsRouter.post(
+  "/:id/voice/transcribe",
+  raw({ type: (request) => audioTypes.has(request.headers["content-type"]?.split(";")[0] ?? ""), limit: getEnv().VOICE_MAX_AUDIO_BYTES }),
+  async (request, response) => {
+    const { organizationId } = getWorkspaceRequest(request).workspace;
+    const user = getWorkspaceRequest(request).authUser;
+    const session = await getSession(sessionIdSchema.parse(request.params.id), organizationId);
+    if (session.learnerId !== user.id) throw new HttpError("Only the session learner can transcribe audio", 403, "SESSION_VOICE_DENIED");
+    if (session.status !== "IN_PROGRESS") throw new HttpError("This simulation session is no longer in progress", 409, "SESSION_NOT_ACTIVE");
+    const mimeType = request.headers["content-type"]?.split(";")[0] ?? "";
+    if (!audioTypes.has(mimeType) || !Buffer.isBuffer(request.body) || !request.body.length) throw new HttpError("A supported audio recording is required", 400, "INVALID_AUDIO");
+    const provider = getVoiceProviders()?.speechToText;
+    if (!provider) throw new HttpError("Voice transcription is not configured. Continue in text mode.", 503, "VOICE_TRANSCRIPTION_UNAVAILABLE");
+    console.info("Sophia voice provider called", { provider: provider.name, operation: "transcription" });
+    try {
+      const transcript = await provider.transcribe({ audio: request.body, mimeType, fileName: `recording.${audioExtension(mimeType)}` });
+      console.info("Sophia voice provider succeeded", { provider: provider.name, operation: "transcription" });
+      response.json({ transcript });
+    } catch (error) {
+      console.error("Sophia voice provider failed", { provider: provider.name, operation: "transcription", errorType: error instanceof Error ? error.name : "UnknownError" });
+      throw new HttpError("The recording could not be transcribed. Try again or continue in text mode.", 502, "VOICE_TRANSCRIPTION_FAILED");
+    }
+  },
+);
+
+simulationSessionsRouter.post("/:id/voice/speech", async (request, response) => {
+  const { organizationId } = getWorkspaceRequest(request).workspace;
+  const user = getWorkspaceRequest(request).authUser;
+  const session = await getSession(sessionIdSchema.parse(request.params.id), organizationId);
+  if (session.learnerId !== user.id) throw new HttpError("Only the session learner can generate simulation audio", 403, "SESSION_VOICE_DENIED");
+  const { messageId } = z.object({ messageId: z.string().uuid() }).parse(request.body);
+  const message = session.messages.find((item) => item.id === messageId && item.role === "ai");
+  if (!message) throw new HttpError("Sophia message not found", 404, "SOPHIA_MESSAGE_NOT_FOUND");
+  const provider = getVoiceProviders()?.textToSpeech;
+  if (!provider) throw new HttpError("Voice playback is not configured. The text response remains available.", 503, "VOICE_SPEECH_UNAVAILABLE");
+  console.info("Sophia voice provider called", { provider: provider.name, operation: "speech" });
+  try {
+    const result = await provider.synthesize({ text: message.content });
+    console.info("Sophia voice provider succeeded", { provider: provider.name, operation: "speech" });
+    response.setHeader("Content-Type", result.contentType);
+    response.setHeader("Cache-Control", "private, no-store");
+    response.send(Buffer.from(result.audio));
+  } catch (error) {
+    console.error("Sophia voice provider failed", { provider: provider.name, operation: "speech", errorType: error instanceof Error ? error.name : "UnknownError" });
+    throw new HttpError("Sophia audio is unavailable. Continue with the text response.", 502, "VOICE_SPEECH_FAILED");
+  }
 });
 
 simulationSessionsRouter.post("/:id/evaluate", async (request, response) => {

@@ -103,6 +103,8 @@ test("Sophia conversation and evaluation mutations require authentication", asyn
   for (const path of [
     "/api/simulation-sessions/00000000-0000-0000-0000-000000000000/messages",
     "/api/simulation-sessions/00000000-0000-0000-0000-000000000000/evaluate",
+    "/api/simulation-sessions/00000000-0000-0000-0000-000000000000/voice/transcribe",
+    "/api/simulation-sessions/00000000-0000-0000-0000-000000000000/voice/speech",
   ]) {
     const response = await fetch(`${baseUrl}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
     assert.equal(response.status, 401, path);

@@ -5,17 +5,21 @@ import {
   ArrowRight,
   Clock3,
   Loader2,
+  Mic,
+  RotateCcw,
   Send,
   ShieldCheck,
   Sparkles,
   UserRound,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import type {
   SimulationMessageResponse,
   SimulationRunConfiguration,
   SimulationSessionResponse,
 } from "@simforge/shared";
-import { apiFetch } from "@/lib/api";
+import { apiBlob, apiFetch } from "@/lib/api";
 import {
   conversationRoleLabel,
   visibleConversationMessages,
@@ -30,6 +34,7 @@ interface MessagePair {
   learnerMessage: SimulationMessageResponse;
   aiMessage: SimulationMessageResponse;
 }
+type VoiceState = "Ready" | "Listening" | "Uploading" | "Transcribing" | "Thinking" | "Speaking" | "Error";
 export function SophiaSimulationRun({
   simulationId,
   autoStart = false,
@@ -40,6 +45,12 @@ export function SophiaSimulationRun({
   const router = useRouter();
   const endRef = useRef<HTMLDivElement>(null);
   const autoStartHandled = useRef(false);
+  const recorderRef = useRef<MediaRecorder | undefined>(undefined);
+  const recordingStreamRef = useRef<MediaStream | undefined>(undefined);
+  const recordingChunksRef = useRef<Blob[]>([]);
+  const holdingToTalkRef = useRef(false);
+  const audioRef = useRef<HTMLAudioElement | undefined>(undefined);
+  const audioUrlRef = useRef<string | undefined>(undefined);
   const [configuration, setConfiguration] =
     useState<SimulationRunConfiguration>();
   const [session, setSession] = useState<SimulationSessionResponse>();
@@ -49,6 +60,10 @@ export function SophiaSimulationRun({
   const [starting, setStarting] = useState(false);
   const [sending, setSending] = useState(false);
   const [evaluating, setEvaluating] = useState(false);
+  const [voiceState, setVoiceState] = useState<VoiceState>("Ready");
+  const [voiceError, setVoiceError] = useState<string>();
+  const [muted, setMuted] = useState(false);
+  const [lastSophiaMessageId, setLastSophiaMessageId] = useState<string>();
   const [error, setError] = useState<string>();
   const loadConfiguration = useCallback(async () => {
     setLoading(true);
@@ -78,6 +93,11 @@ export function SophiaSimulationRun({
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [conversation.length]);
+  useEffect(() => () => {
+    recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+    audioRef.current?.pause();
+    if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
+  }, []);
   const start = useCallback(async () => {
     setStarting(true);
     setError(undefined);
@@ -89,6 +109,7 @@ export function SophiaSimulationRun({
       setSession(created);
       setConfiguration(created.simulation);
       setMessages(created.messages);
+      setLastSophiaMessageId([...created.messages].reverse().find((message) => message.role === "ai")?.id);
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -105,11 +126,109 @@ export function SophiaSimulationRun({
     autoStartHandled.current = true;
     void start();
   }, [autoStart, configuration, session, start]);
+
+  const playSophiaMessage = useCallback(async (messageId: string) => {
+    if (!session || muted) return;
+    setVoiceError(undefined);
+    try {
+      setVoiceState("Speaking");
+      const audio = await apiBlob(`/api/simulation-sessions/${session.id}/voice/speech`, {
+        method: "POST",
+        body: JSON.stringify({ messageId }),
+      });
+      if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
+      const url = URL.createObjectURL(audio);
+      audioUrlRef.current = url;
+      const player = new Audio(url);
+      audioRef.current = player;
+      player.onended = () => setVoiceState("Ready");
+      player.onerror = () => {
+        setVoiceState("Error");
+        setVoiceError("Sophia audio could not be played. Her text response is still available.");
+      };
+      await player.play();
+      setLastSophiaMessageId(messageId);
+    } catch (caught) {
+      setVoiceState("Error");
+      setVoiceError(caught instanceof Error ? caught.message : "Sophia audio is unavailable. Continue with text.");
+    }
+  }, [muted, session]);
+
+  const transcribeRecording = useCallback(async (audio: Blob) => {
+    if (!session) return;
+    setVoiceError(undefined);
+    try {
+      setVoiceState("Uploading");
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      setVoiceState("Transcribing");
+      const result = await apiFetch<{ transcript: string }>(`/api/simulation-sessions/${session.id}/voice/transcribe`, {
+        method: "POST",
+        headers: { "Content-Type": audio.type || "audio/webm" },
+        body: audio,
+      });
+      setContent(result.transcript);
+      setVoiceState("Ready");
+    } catch (caught) {
+      setVoiceState("Error");
+      setVoiceError(caught instanceof Error ? caught.message : "The recording could not be transcribed. Try again or use text.");
+    }
+  }, [session]);
+
+  async function beginPushToTalk() {
+    if (!session || sending || evaluating) return;
+    holdingToTalkRef.current = true;
+    setVoiceError(undefined);
+    try {
+      if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") throw new Error("Microphone recording is not supported in this browser. Continue in text mode.");
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!holdingToTalkRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      recordingStreamRef.current = stream;
+      recordingChunksRef.current = [];
+      const preferredType = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"].find((type) => MediaRecorder.isTypeSupported(type));
+      const recorder = new MediaRecorder(stream, preferredType ? { mimeType: preferredType } : undefined);
+      recorderRef.current = recorder;
+      recorder.ondataavailable = (event) => { if (event.data.size) recordingChunksRef.current.push(event.data); };
+      recorder.onstop = () => {
+        stream.getTracks().forEach((track) => track.stop());
+        const audio = new Blob(recordingChunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        if (audio.size) void transcribeRecording(audio);
+        else {
+          setVoiceState("Error");
+          setVoiceError("No audio was captured. Hold the microphone button and try again.");
+        }
+      };
+      recorder.start();
+      setVoiceState("Listening");
+    } catch (caught) {
+      holdingToTalkRef.current = false;
+      setVoiceState("Error");
+      setVoiceError(caught instanceof Error ? caught.message : "Microphone access failed. Continue in text mode.");
+    }
+  }
+
+  function endPushToTalk() {
+    holdingToTalkRef.current = false;
+    if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+  }
+
+  function toggleMute() {
+    setMuted((current) => {
+      if (!current) {
+        audioRef.current?.pause();
+        setVoiceState("Ready");
+      }
+      return !current;
+    });
+  }
   async function send(event: React.FormEvent) {
     event.preventDefault();
     const value = content.trim();
     if (!session || !value || sending) return;
     setSending(true);
+    setVoiceState("Thinking");
     setError(undefined);
     try {
       const pair = await apiFetch<MessagePair>(
@@ -122,6 +241,9 @@ export function SophiaSimulationRun({
         pair.aiMessage,
       ]);
       setContent("");
+      setLastSophiaMessageId(pair.aiMessage.id);
+      setVoiceState("Ready");
+      if (!muted) void playSophiaMessage(pair.aiMessage.id);
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -223,6 +345,17 @@ export function SophiaSimulationRun({
                   Sophia uses the configured simulation persona and organization
                   context. Your messages are saved for evaluation and coaching.
                 </span>
+              </div>
+              <div className="space-y-2 border-t pt-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium">Voice: {sending ? "Thinking" : voiceState}</span>
+                  <Button type="button" variant="ghost" size="icon" className="size-8" onClick={toggleMute} aria-label={muted ? "Unmute Sophia" : "Mute Sophia"}>
+                    {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
+                  </Button>
+                </div>
+                <Button type="button" variant="outline" size="sm" className="w-full" disabled={!lastSophiaMessageId || muted || voiceState === "Speaking"} onClick={() => lastSophiaMessageId && void playSophiaMessage(lastSophiaMessageId)}>
+                  <RotateCcw className="size-4" />Replay Sophia
+                </Button>
               </div>
               {configuration.persona && (
                 <div className="border-t pt-3">
@@ -327,21 +460,38 @@ export function SophiaSimulationRun({
                 {error}
               </div>
             )}
+            {voiceError && (
+              <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-700 dark:text-amber-300">
+                {voiceError}
+              </div>
+            )}
             <form
               className="flex flex-col gap-3 sm:flex-row sm:items-end"
               onSubmit={send}
             >
-              <Textarea
-                value={content}
-                onChange={(event) => setContent(event.target.value)}
-                disabled={!session || sending || evaluating}
-                className="min-h-20 resize-none"
-                placeholder={
-                  session
-                    ? "Describe what you would say or do next…"
-                    : "Start the simulation to respond"
-                }
-              />
+              <div className="flex flex-1 gap-2">
+                <Button
+                  type="button"
+                  variant={voiceState === "Listening" ? "default" : "outline"}
+                  className="h-20 w-20 shrink-0 touch-none flex-col gap-1"
+                  disabled={!session || sending || evaluating || ["Uploading", "Transcribing", "Speaking"].includes(voiceState)}
+                  onPointerDown={(event) => { event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); void beginPushToTalk(); }}
+                  onPointerUp={endPushToTalk}
+                  onPointerCancel={endPushToTalk}
+                  onKeyDown={(event) => { if (!event.repeat && (event.key === " " || event.key === "Enter")) { event.preventDefault(); void beginPushToTalk(); } }}
+                  onKeyUp={(event) => { if (event.key === " " || event.key === "Enter") { event.preventDefault(); endPushToTalk(); } }}
+                >
+                  {voiceState === "Listening" ? <Loader2 className="animate-pulse" /> : <Mic />}
+                  <span className="text-[10px]">Hold to talk</span>
+                </Button>
+                <Textarea
+                  value={content}
+                  onChange={(event) => setContent(event.target.value)}
+                  disabled={!session || sending || evaluating || voiceState === "Listening"}
+                  className="min-h-20 resize-none"
+                  placeholder={session ? "Hold to talk, then review and edit the transcript before sending…" : "Start the simulation to respond"}
+                />
+              </div>
               <Button
                 type="submit"
                 disabled={!session || !content.trim() || sending || evaluating}
