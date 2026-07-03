@@ -90,7 +90,7 @@ app.use((_request, response) => {
 app.use(
   (
     error: unknown,
-    _request: express.Request,
+    request: express.Request,
     response: express.Response,
     _next: express.NextFunction,
   ) => {
@@ -109,7 +109,18 @@ app.use(
       return;
     }
 
-    console.error(error);
-    response.status(500).json({ error: "An unexpected error occurred" });
+    const failure =
+      error instanceof Error
+        ? { errorType: error.name, message: error.message }
+        : { errorType: "UnknownError", message: String(error) };
+    console.error("Unhandled API request failure", {
+      method: request.method,
+      path: request.originalUrl,
+      ...failure,
+    });
+    response.status(500).json({
+      error: "An unexpected error occurred",
+      code: "INTERNAL_ERROR",
+    });
   },
 );

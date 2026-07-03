@@ -18,7 +18,7 @@ import type {
   SimulationRunConfiguration,
   SimulationSessionResponse,
 } from "@simforge/shared";
-import { apiBlob, apiFetch } from "@/lib/api";
+import { ApiError, apiBlob, apiFetch } from "@/lib/api";
 import { resolveSophiaAvatarState } from "@/lib/sophia-avatar";
 import { startSophiaLipSync } from "@/lib/sophia-lip-sync";
 import {
@@ -284,19 +284,32 @@ export function SophiaSimulationRun({
     if (!session) return;
     setEvaluating(true);
     setError(undefined);
+    const endpoint = `/api/simulation-sessions/${session.id}/evaluate`;
     try {
-      await apiFetch<SimulationSessionResponse>(
-        `/api/simulation-sessions/${session.id}/evaluate`,
-        { method: "POST" },
-      );
-      await apiFetch(`/api/simulation-sessions/${session.id}/coach`, {
-        method: "POST",
-      });
+      await apiFetch<SimulationSessionResponse>(endpoint, { method: "POST" });
       router.push(`/simulation-studio/sessions/${session.id}/report`);
     } catch (caught) {
+      const failure =
+        caught instanceof ApiError
+          ? {
+              endpoint,
+              status: caught.status,
+              code: caught.code ?? "UNKNOWN_API_ERROR",
+              message: caught.message,
+            }
+          : {
+              endpoint,
+              status: undefined,
+              code: "UNEXPECTED_CLIENT_ERROR",
+              message:
+                caught instanceof Error ? caught.message : "Unknown error",
+            };
+      console.error("Simulation evaluation failed", failure);
       setError(
-        caught instanceof Error
-          ? caught.message
+        caught instanceof ApiError
+          ? `Evaluation failed: ${caught.message} (${caught.code ?? `HTTP ${caught.status}`})`
+          : caught instanceof Error
+            ? `Evaluation failed: ${caught.message}`
           : "The capability report could not be generated.",
       );
       setEvaluating(false);

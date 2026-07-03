@@ -18,3 +18,14 @@ test("runtime keeps controls accessible and guidance in the right rail", () => {
   for (const panel of ["Live evaluation", "Coaching tip", "Scenario"]) assert.match(source, new RegExp(panel, "u"));
   assert.match(source, /order-3 space-y-4 lg:col-start-2/u);
 });
+
+test("finishing evaluates before navigating and leaves coaching to the report", () => {
+  const evaluateStart = source.indexOf("async function evaluate()");
+  const renderStart = source.indexOf("if (loading)", evaluateStart);
+  const evaluateSource = source.slice(evaluateStart, renderStart);
+
+  assert.match(evaluateSource, /\/evaluate/u);
+  assert.match(evaluateSource, /router\.push/u);
+  assert.doesNotMatch(evaluateSource, /\/coach/u);
+  assert.match(evaluateSource, /Simulation evaluation failed/u);
+});
