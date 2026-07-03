@@ -21,6 +21,7 @@ import type {
 import { ApiError, apiBlob, apiFetch } from "@/lib/api";
 import { resolveSophiaAvatarState } from "@/lib/sophia-avatar";
 import { startSophiaLipSync } from "@/lib/sophia-lip-sync";
+import { deriveLiveCoachingIndicators } from "@/lib/live-evaluation";
 import {
   conversationRoleLabel,
   visibleConversationMessages,
@@ -31,6 +32,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { SophiaAvatarStage } from "./sophia-avatar-stage";
+import { LiveCoachingPanel } from "./live-coaching-panel";
 
 interface MessagePair {
   learnerMessage: SimulationMessageResponse;
@@ -95,6 +97,12 @@ export function SophiaSimulationRun({
   }, [loadConfiguration]);
   const conversation = useMemo(
     () => visibleConversationMessages(messages),
+    [messages],
+  );
+  const liveCoachingIndicators = useMemo(
+    () => deriveLiveCoachingIndicators(
+      messages.filter((message) => message.role === "learner").map((message) => message.content),
+    ),
     [messages],
   );
   useEffect(() => {
@@ -400,10 +408,7 @@ export function SophiaSimulationRun({
           </div>}
         />
         <aside className="order-3 space-y-4 lg:col-start-2 lg:row-span-2 lg:row-start-1" aria-label="Simulation guidance">
-          <Card className="border-slate-700/50 bg-slate-950 text-slate-100">
-            <CardHeader><CardTitle className="text-base">Live evaluation</CardTitle></CardHeader>
-            <CardContent><p className="text-sm leading-6 text-slate-400">Your completed conversation will be evaluated after you end the simulation. Live scoring is not shown during practice.</p><div className="mt-4 space-y-2" aria-hidden="true">{[72, 58, 66].map((width) => <div key={width} className="h-2 rounded-full bg-slate-800"><div className="h-full rounded-full bg-slate-700" style={{ width: `${width}%` }} /></div>)}</div></CardContent>
-          </Card>
+          <LiveCoachingPanel indicators={liveCoachingIndicators} />
           <Card>
             <CardHeader><CardTitle className="flex items-center gap-2 text-base"><ShieldCheck className="size-4 text-primary" />Coaching tip</CardTitle></CardHeader>
             <CardContent><p className="text-sm leading-6 text-muted-foreground">Respond naturally, use specific evidence, and make your next action clear. Personalized coaching appears in the final report.</p></CardContent>
