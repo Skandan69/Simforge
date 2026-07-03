@@ -20,6 +20,7 @@ import type {
   SimulationSessionResponse,
 } from "@simforge/shared";
 import { apiBlob, apiFetch } from "@/lib/api";
+import { resolveSophiaAvatarState } from "@/lib/sophia-avatar";
 import {
   conversationRoleLabel,
   visibleConversationMessages,
@@ -29,6 +30,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { SophiaAvatarStage } from "./sophia-avatar-stage";
 
 interface MessagePair {
   learnerMessage: SimulationMessageResponse;
@@ -308,6 +310,7 @@ export function SophiaSimulationRun({
         </div>
       </div>
     );
+  const avatarState = resolveSophiaAvatarState({ voiceState, sending, hasError: Boolean(voiceError) });
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <section className="rounded-2xl border bg-card p-5 shadow-sm sm:p-6">
@@ -337,6 +340,51 @@ export function SophiaSimulationRun({
           )}
         </div>
       </section>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+        <SophiaAvatarStage
+          state={avatarState}
+          controls={<div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-center">
+            <Button
+              type="button"
+              variant={voiceState === "Listening" ? "default" : "secondary"}
+              className="touch-none"
+              disabled={!session || sending || evaluating || ["Uploading", "Transcribing", "Speaking"].includes(voiceState)}
+              aria-label="Hold to speak to Sophia"
+              onPointerDown={(event) => { event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); void beginPushToTalk(); }}
+              onPointerUp={endPushToTalk}
+              onPointerCancel={endPushToTalk}
+              onKeyDown={(event) => { if (!event.repeat && (event.key === " " || event.key === "Enter")) { event.preventDefault(); void beginPushToTalk(); } }}
+              onKeyUp={(event) => { if (event.key === " " || event.key === "Enter") { event.preventDefault(); endPushToTalk(); } }}
+            >
+              {voiceState === "Listening" ? <Loader2 className="animate-pulse" /> : <Mic />}
+              {voiceState === "Listening" ? `${(recordingDurationMs / 1_000).toFixed(1)}s` : "Speak"}
+            </Button>
+            <Button type="button" variant="secondary" onClick={toggleMute} aria-label={muted ? "Unmute Sophia" : "Mute Sophia"}>
+              {muted ? <VolumeX /> : <Volume2 />}{muted ? "Unmute" : "Mute"}
+            </Button>
+            <Button type="button" variant="secondary" disabled={!lastSophiaMessageId || muted || voiceState === "Speaking"} onClick={() => lastSophiaMessageId && void playSophiaMessage(lastSophiaMessageId)} aria-label="Replay Sophia's last response">
+              <RotateCcw />Replay
+            </Button>
+            <Button type="button" variant="outline" disabled={!session || evaluating || !conversation.some((message) => message.role === "learner")} onClick={() => void evaluate()} aria-label="End simulation and generate report">
+              {evaluating ? <Loader2 className="animate-spin" /> : null}{evaluating ? "Finishing…" : "End simulation"}
+            </Button>
+          </div>}
+        />
+        <aside className="space-y-4">
+          <Card className="border-slate-700/50 bg-slate-950 text-slate-100">
+            <CardHeader><CardTitle className="text-base">Live evaluation</CardTitle></CardHeader>
+            <CardContent><p className="text-sm leading-6 text-slate-400">Your completed conversation will be evaluated after you end the simulation. Live scoring is not shown during practice.</p><div className="mt-4 space-y-2" aria-hidden="true">{[72, 58, 66].map((width) => <div key={width} className="h-2 rounded-full bg-slate-800"><div className="h-full rounded-full bg-slate-700" style={{ width: `${width}%` }} /></div>)}</div></CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle className="flex items-center gap-2 text-base"><ShieldCheck className="size-4 text-primary" />Coaching tip</CardTitle></CardHeader>
+            <CardContent><p className="text-sm leading-6 text-muted-foreground">Respond naturally, use specific evidence, and make your next action clear. Personalized coaching appears in the final report.</p></CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle className="text-base">Scenario</CardTitle></CardHeader>
+            <CardContent className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{configuration.scenarioSetup}</CardContent>
+          </Card>
+        </aside>
+      </div>
       <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
         <aside className="space-y-4">
           <Card>
@@ -355,17 +403,6 @@ export function SophiaSimulationRun({
                   context. Your messages are saved for evaluation and coaching.
                 </span>
               </div>
-              <div className="space-y-2 border-t pt-3">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-medium">Voice: {sending ? "Thinking" : voiceState}</span>
-                  <Button type="button" variant="ghost" size="icon" className="size-8" onClick={toggleMute} aria-label={muted ? "Unmute Sophia" : "Mute Sophia"}>
-                    {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
-                  </Button>
-                </div>
-                <Button type="button" variant="outline" size="sm" className="w-full" disabled={!lastSophiaMessageId || muted || voiceState === "Speaking"} onClick={() => lastSophiaMessageId && void playSophiaMessage(lastSophiaMessageId)}>
-                  <RotateCcw className="size-4" />Replay Sophia
-                </Button>
-              </div>
               {configuration.persona && (
                 <div className="border-t pt-3">
                   <p className="flex items-center gap-2 font-medium">
@@ -380,14 +417,6 @@ export function SophiaSimulationRun({
                   </p>
                 </div>
               )}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Scenario</CardTitle>
-            </CardHeader>
-            <CardContent className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
-              {configuration.scenarioSetup}
             </CardContent>
           </Card>
         </aside>
@@ -478,29 +507,13 @@ export function SophiaSimulationRun({
               className="flex flex-col gap-3 sm:flex-row sm:items-end"
               onSubmit={send}
             >
-              <div className="flex flex-1 gap-2">
-                <Button
-                  type="button"
-                  variant={voiceState === "Listening" ? "default" : "outline"}
-                  className="h-20 w-20 shrink-0 touch-none flex-col gap-1"
-                  disabled={!session || sending || evaluating || ["Uploading", "Transcribing", "Speaking"].includes(voiceState)}
-                  onPointerDown={(event) => { event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); void beginPushToTalk(); }}
-                  onPointerUp={endPushToTalk}
-                  onPointerCancel={endPushToTalk}
-                  onKeyDown={(event) => { if (!event.repeat && (event.key === " " || event.key === "Enter")) { event.preventDefault(); void beginPushToTalk(); } }}
-                  onKeyUp={(event) => { if (event.key === " " || event.key === "Enter") { event.preventDefault(); endPushToTalk(); } }}
-                >
-                  {voiceState === "Listening" ? <Loader2 className="animate-pulse" /> : <Mic />}
-                  <span className="text-[10px]">{voiceState === "Listening" ? `${(recordingDurationMs / 1_000).toFixed(1)}s` : "Hold to talk"}</span>
-                </Button>
-                <Textarea
-                  value={content}
-                  onChange={(event) => setContent(event.target.value)}
-                  disabled={!session || sending || evaluating || voiceState === "Listening"}
-                  className="min-h-20 resize-none"
-                  placeholder={session ? "Hold to talk, then review and edit the transcript before sending…" : "Start the simulation to respond"}
-                />
-              </div>
+              <Textarea
+                value={content}
+                onChange={(event) => setContent(event.target.value)}
+                disabled={!session || sending || evaluating || voiceState === "Listening"}
+                className="min-h-20 flex-1 resize-none"
+                placeholder={session ? "Speak above or type here, then review and edit before sending…" : "Start the simulation to respond"}
+              />
               <Button
                 type="submit"
                 disabled={!session || !content.trim() || sending || evaluating}
