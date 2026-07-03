@@ -101,6 +101,7 @@ simulationSessionsRouter.post("/", async (request, response) => {
     systemPrompt: async () => buildSophiaSystemPrompt(await loadSophiaPromptContext({ organizationId, learnerId: user.id, simulationId: simulation.id })),
     messages: [{ role: "learner", content: "Begin the scenario now in the configured counterpart role. Open with one concise, realistic statement or question for the learner." }],
     fallback: () => createPlaceholderOpeningMessage(simulation.title, simulation.persona?.role),
+    personaRole: simulation.persona?.role,
   });
   const session = await prisma.simulationSession.create({
     data: {
@@ -173,6 +174,7 @@ simulationSessionsRouter.post("/:id/messages", async (request, response) => {
     systemPrompt: async () => buildSophiaSystemPrompt(await loadSophiaPromptContext({ organizationId, learnerId: session.learnerId, simulationId: session.simulationId })),
     messages: history,
     fallback: () => createPlaceholderAiResponse(session.simulation.title),
+    personaRole: session.simulation.persona?.role,
   });
   const aiMessage = await prisma.simulationMessage.create({ data: { sessionId: session.id, role: "ai", content: aiContent } });
   response.status(201).json({ learnerMessage, aiMessage });

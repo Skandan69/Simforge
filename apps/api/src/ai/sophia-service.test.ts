@@ -35,3 +35,26 @@ test("missing credentials and timeouts activate fallback with safe reasons", asy
   assert.equal(events.some((event) => event.status === "fallback" && event.reason === "credentials_missing"), true);
   assert.equal(events.some((event) => event.status === "fallback" && event.reason === "timeout"), true);
 });
+
+test("role guard replaces provider drift without making another AI request", async () => {
+  let calls = 0;
+  const provider: AIProvider = {
+    name: "mock",
+    generateTrainerResponse: async () => {
+      calls += 1;
+      return "I need to verify the duplicate transaction before I can review refund eligibility.";
+    },
+    evaluateSimulation: async () => evaluation,
+  };
+  const response = await generateSophiaReply({
+    provider,
+    systemPrompt: "customer simulation",
+    messages: [{ role: "learner", content: "What do you require?" }],
+    fallback: () => "provider fallback",
+    personaRole: "Frustrated customer",
+    onEvent: () => undefined,
+  });
+  assert.equal(calls, 1);
+  assert.match(response, /I need you to look into this from your side/u);
+  assert.doesNotMatch(response, /review refund eligibility/u);
+});

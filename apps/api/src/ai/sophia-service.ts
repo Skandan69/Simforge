@@ -1,4 +1,5 @@
 import type { AIConversationMessage, AIProvider, SophiaEvaluationResult } from "./types.js";
+import { roleIntegrityRecovery, validatePersonaResponse } from "./role-integrity.js";
 
 export type SophiaAIEvent = {
   status: "called" | "succeeded" | "failed" | "fallback";
@@ -25,7 +26,7 @@ function failureReason(error: unknown): "provider_failure" | "timeout" {
 type PromptInput = string | (() => Promise<string>);
 const resolvePrompt = (prompt: PromptInput) => typeof prompt === "string" ? Promise.resolve(prompt) : prompt();
 
-export async function generateSophiaReply(input: { provider: AIProvider | null; systemPrompt: PromptInput; messages: AIConversationMessage[]; fallback: () => string; onFailure?: (error: unknown) => void; onEvent?: (event: SophiaAIEvent) => void }) {
+export async function generateSophiaReply(input: { provider: AIProvider | null; systemPrompt: PromptInput; messages: AIConversationMessage[]; fallback: () => string; personaRole?: string | null; onFailure?: (error: unknown) => void; onEvent?: (event: SophiaAIEvent) => void }) {
   const emit = input.onEvent ?? logEvent;
   if (!input.provider) {
     emit({ status: "fallback", provider: "none", operation: "conversation", reason: "credentials_missing" });
@@ -35,6 +36,16 @@ export async function generateSophiaReply(input: { provider: AIProvider | null; 
     const systemPrompt = await resolvePrompt(input.systemPrompt);
     emit({ status: "called", provider: input.provider.name, operation: "conversation" });
     const response = await input.provider.generateTrainerResponse({ systemPrompt, messages: input.messages });
+    const integrity = validatePersonaResponse(response, input.personaRole);
+    if (!integrity.valid) {
+      console.warn("Sophia role integrity guard activated", {
+        provider: input.provider.name,
+        roleType: integrity.roleType,
+        violations: integrity.violations,
+      });
+      emit({ status: "succeeded", provider: input.provider.name, operation: "conversation" });
+      return roleIntegrityRecovery(input.personaRole);
+    }
     emit({ status: "succeeded", provider: input.provider.name, operation: "conversation" });
     return response;
   } catch (error) {
