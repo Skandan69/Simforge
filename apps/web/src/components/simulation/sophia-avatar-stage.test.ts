@@ -11,7 +11,7 @@ test("Sophia avatar stage renders the local asset and accessible runtime status"
   assert.match(markup, /Sophia is speaking/u);
   assert.match(markup, /aria-live="polite"/u);
   assert.match(markup, /aria-label="Mute Sophia"/u);
-  assert.match(markup, /scaleY\(/u);
+  assert.match(markup, /Sophia, professional AI simulation trainer/u);
 });
 
 test("Sophia avatar fallback preserves a usable non-avatar identity", () => {
