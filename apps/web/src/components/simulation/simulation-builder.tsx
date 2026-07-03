@@ -13,6 +13,7 @@ import {
 import {
   SIMULATION_DIFFICULTIES,
   SIMULATION_STATUSES,
+  type EnterprisePersonaTemplate,
   type KnowledgeBaseSummary,
   type SaveSimulationInput,
   type SimulationCriterionSummary,
@@ -74,9 +75,11 @@ export function SimulationBuilder({ id }: { id?: string }) {
   const [value, setValue] = useState<SaveSimulationInput>(initial);
   const [bases, setBases] = useState<KnowledgeBaseSummary[]>([]);
   const [personas, setPersonas] = useState<SimulationPersonaSummary[]>([]);
+  const [personaTemplates, setPersonaTemplates] = useState<EnterprisePersonaTemplate[]>([]);
   const [criteria, setCriteria] = useState<SimulationCriterionSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState(false);
+  const [installingPersona, setInstallingPersona] = useState<string>();
   const [error, setError] = useState<string>();
   const [canEdit, setCanEdit] = useState(false);
   useEffect(() => {
@@ -84,16 +87,18 @@ export function SimulationBuilder({ id }: { id?: string }) {
     void Promise.all([
       apiFetch<KnowledgeBaseSummary[]>("/api/knowledge-bases?status=Active"),
       apiFetch<SimulationPersonaSummary[]>("/api/simulation-personas"),
+      apiFetch<EnterprisePersonaTemplate[]>("/api/simulation-personas/templates"),
       apiFetch<SimulationCriterionSummary[]>("/api/simulation-criteria"),
       apiFetch<SimulationDashboardResponse>("/api/simulations/dashboard"),
       id
         ? apiFetch<SimulationDetail>(`/api/simulations/${id}`)
         : Promise.resolve(undefined),
     ])
-      .then(([knowledge, personaList, criterionList, dashboard, existing]) => {
+      .then(([knowledge, personaList, templateList, criterionList, dashboard, existing]) => {
         if (!active) return;
         setBases(knowledge);
         setPersonas(personaList);
+        setPersonaTemplates(templateList);
         setCriteria(criterionList);
         setCanEdit(dashboard.canEdit);
         if (existing)
@@ -149,6 +154,31 @@ export function SimulationBuilder({ id }: { id?: string }) {
         ? value[key].filter((item) => item !== idValue)
         : [...value[key], idValue],
     );
+  async function selectPersonaTemplate(templateId: string) {
+    if (!canEdit || installingPersona) return;
+    setInstallingPersona(templateId);
+    setError(undefined);
+    try {
+      const installed = await apiFetch<SimulationPersonaSummary>(
+        `/api/simulation-personas/templates/${templateId}/install`,
+        { method: "POST" },
+      );
+      setPersonas((current) =>
+        current.some((item) => item.id === installed.id)
+          ? current
+          : [installed, ...current],
+      );
+      patch("personaId", installed.id);
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Unable to configure this persona template.",
+      );
+    } finally {
+      setInstallingPersona(undefined);
+    }
+  }
   function validateCurrent() {
     if (
       step === 0 &&
@@ -392,6 +422,48 @@ export function SimulationBuilder({ id }: { id?: string }) {
             </SelectionEmpty>
           )}
           {step === 2 && (
+            <div className="space-y-7">
+              <div>
+                <h2 className="font-semibold">Choose a persona template</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Templates configure Sophia&apos;s identity, communication style,
+                  emotional profile, challenge, and role boundaries without
+                  changing the runtime.
+                </p>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {personaTemplates.map((template) => {
+                  const installed = personas.find(
+                    (item) => item.name === template.displayName,
+                  );
+                  return (
+                    <Choice
+                      key={template.id}
+                      selected={Boolean(
+                        installed && value.personaId === installed.id,
+                      )}
+                      onClick={() =>
+                        installed
+                          ? patch(
+                              "personaId",
+                              value.personaId === installed.id
+                                ? null
+                                : installed.id,
+                            )
+                          : void selectPersonaTemplate(template.id)
+                      }
+                      title={template.displayName}
+                      description={`${template.industry} · ${template.challengeLevel} challenge · ${template.description}`}
+                    />
+                  );
+                })}
+              </div>
+              {installingPersona && (
+                <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" />
+                  Configuring persona…
+                </p>
+              )}
             <SelectionEmpty
               title="Choose a reusable persona"
               description="The persona defines the counterpart’s role, tone, and behavior. A persona is optional."
@@ -412,6 +484,7 @@ export function SimulationBuilder({ id }: { id?: string }) {
                 />
               ))}
             </SelectionEmpty>
+            </div>
           )}
           {step === 3 && (
             <div className="space-y-5">

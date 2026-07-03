@@ -3,6 +3,8 @@ import { z } from "zod";
 import {
   SIMULATION_DIFFICULTIES,
   SIMULATION_STATUSES,
+  ENTERPRISE_PERSONA_TEMPLATES,
+  getEnterprisePersonaTemplate,
   type SaveSimulationInput,
   type SimulationDashboardResponse,
   type SimulationDetail,
@@ -18,6 +20,7 @@ import {
   requireWorkspace,
 } from "../middleware/workspace.js";
 import { archiveSimulationData, duplicateSimulationIdentity, isKnowledgeBaseSelectionValid, scopedSimulationMutation, simulationRelations } from "../services/simulation-config.js";
+import { personaTemplateToSimulationPersona } from "../services/persona-framework.js";
 
 const saveSchema = z.object({
   title: z.string().trim().min(3).max(160),
@@ -410,6 +413,33 @@ simulationPersonasRouter.get("/", async (request, response) => {
     }),
   );
 });
+simulationPersonasRouter.get("/templates", (_request, response) => {
+  response.json(ENTERPRISE_PERSONA_TEMPLATES);
+});
+simulationPersonasRouter.post(
+  "/templates/:templateId/install",
+  requireSimulationWrite,
+  async (request, response) => {
+    const { organizationId } = getWorkspaceRequest(request).workspace;
+    const user = getWorkspaceRequest(request).authUser;
+    const template = getEnterprisePersonaTemplate(z.string().trim().min(1).parse(request.params.templateId));
+    if (!template) throw new HttpError("Persona template not found", 404, "PERSONA_TEMPLATE_NOT_FOUND");
+    const existing = await prisma.simulationPersona.findFirst({
+      where: { organizationId, name: template.displayName },
+    });
+    if (existing) {
+      response.json(existing);
+      return;
+    }
+    response.status(201).json(await prisma.simulationPersona.create({
+      data: {
+        ...personaTemplateToSimulationPersona(template),
+        organizationId,
+        createdBy: user.id,
+      },
+    }));
+  },
+);
 simulationPersonasRouter.post(
   "/",
   requireSimulationWrite,

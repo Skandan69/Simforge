@@ -83,6 +83,7 @@ test("Simulation Studio endpoints require authentication", async () => {
     "/api/simulations",
     "/api/simulations/dashboard",
     "/api/simulation-personas",
+    "/api/simulation-personas/templates",
     "/api/simulation-criteria",
   ]) {
     const response = await fetch(`${baseUrl}${path}`);
@@ -108,6 +109,7 @@ test("Sophia conversation and evaluation mutations require authentication", asyn
     "/api/simulation-sessions/00000000-0000-0000-0000-000000000000/evaluate",
     "/api/simulation-sessions/00000000-0000-0000-0000-000000000000/voice/transcribe",
     "/api/simulation-sessions/00000000-0000-0000-0000-000000000000/voice/speech",
+    "/api/simulation-personas/templates/angry-customer/install",
   ]) {
     const response = await fetch(`${baseUrl}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
     assert.equal(response.status, 401, path);
