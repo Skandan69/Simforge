@@ -7,7 +7,10 @@ const source = readFileSync(fileURLToPath(new URL("./live-coaching-panel.tsx", i
 
 test("live coaching panel renders qualitative indicators and authoritative-report guidance", () => {
   assert.match(source, /Live Coaching/u);
-  assert.match(source, /indicators\.map/u);
+  assert.match(source, /Behavioral Intelligence/u);
+  assert.match(source, /Communication Intelligence/u);
+  assert.match(source, /behavioralIndicators\.map/u);
+  assert.match(source, /communicationIndicators\.map/u);
   assert.match(source, /indicator\.state/u);
   assert.match(source, /final evaluation remains authoritative/u);
   assert.doesNotMatch(source, /%|percentage|score:/iu);

@@ -40,7 +40,7 @@ const rules: Record<
       { pattern: /\b(?:thank you for (?:explaining|sharing|letting me know)|i hear you)\b/iu, helper: "Responds with respectful acknowledgement." },
     ],
     risks: [
-      { pattern: /\b(?:that(?:'s| is) not my concern|calm down|not a big deal|you(?:'re| are) overreacting|stop complaining|whatever)\b/iu, helper: "A response may dismiss the other person's concern." },
+      { pattern: /\b(?:that(?:'s|s| is) (?:none|not) (?:of )?my concern|calm down|not a big deal|you(?:'re| are) overreacting|stop complaining|whatever)\b/iu, helper: "A response may dismiss the other person's concern." },
     ],
   },
   "Active Listening": {
@@ -64,7 +64,7 @@ const rules: Record<
   },
   Confidence: {
     evidence: [
-      { pattern: /\b(?:i will|i can take ownership|here(?:'s| is) what (?:i|we) (?:will|can)|the next step is|what i can do is|i(?:'ll| will) make sure)\b/iu, helper: "Communicates a clear, owned next step." },
+      { pattern: /\b(?:i will|i can take ownership|here(?:'s| is) what (?:i|we) (?:will|can)|the next step is|what i can do is|i(?:'ll| will) make sure|let me (?:verify|check|review|confirm|explain))\b/iu, helper: "Communicates a clear, owned next step." },
     ],
     risks: [
       { pattern: /\b(?:i guess|maybe i can|i(?:'m| am) not sure|probably|i don(?:'t| not) know what to do)\b/iu, helper: "The next step may sound uncertain or unowned." },
@@ -137,3 +137,111 @@ export function deriveLiveCoachingIndicators(
 }
 
 export const liveCoachingState = qualitativeState;
+
+export const COMMUNICATION_INTELLIGENCE_SIGNALS = [
+  "Grammar",
+  "Spelling",
+  "Punctuation",
+  "Sentence Clarity",
+  "Professional Tone",
+  "Word Choice",
+] as const;
+
+export type CommunicationSignal = (typeof COMMUNICATION_INTELLIGENCE_SIGNALS)[number];
+export type CommunicationState = "Not observed yet" | "Developing" | "Good" | "Strong" | "Excellent" | "Needs attention";
+
+export interface CommunicationIndicator {
+  signal: CommunicationSignal;
+  state: CommunicationState;
+  helper: string;
+  positiveCount: number;
+  riskCount: number;
+}
+
+interface CommunicationAssessment {
+  risk: boolean;
+  helper: string;
+}
+
+const startsWithCapital = (message: string) => /^[A-Z0-9“"']/u.test(message.trim());
+const endsWithPunctuation = (message: string) => /[.!?][”"']?$/u.test(message.trim());
+const words = (message: string) => message.trim().split(/\s+/u).filter(Boolean);
+
+function grammarAssessment(message: string): CommunicationAssessment {
+  const risk = /\b(?:i|you|we|they) (?:is|has)\b|\b(?:he|she|it) (?:are|have|do)\b|\b(?:i|you|we|they) was\b|\b(?:need|want) check\b/iu.test(message);
+  return { risk, helper: risk ? "Review verb agreement or missing connecting words." : "Sentence structure is professionally formed." };
+}
+
+function spellingAssessment(message: string): CommunicationAssessment {
+  const risk = /\b(?:thats|recieve|adress|definately|seperate|thier|wont|cant|dont|couldnt|shouldnt|acheive|occured)\b/iu.test(message);
+  return { risk, helper: risk ? "Check obvious spelling or contraction errors before sending." : "No obvious business-writing spelling issue was observed." };
+}
+
+function punctuationAssessment(message: string): CommunicationAssessment {
+  const trimmed = message.trim();
+  const risk = !startsWithCapital(trimmed) || !endsWithPunctuation(trimmed) || /[!?]{2,}|\.{3,}/u.test(trimmed);
+  return { risk, helper: risk ? "Use sentence capitalization and clear, restrained punctuation." : "Capitalization and sentence punctuation are clear." };
+}
+
+function clarityAssessment(message: string): CommunicationAssessment {
+  const trimmed = message.trim();
+  const vague = /\b(?:do something|some stuff|that thing|handle it|sort it out|you know|it is what it is|whatever works)\b/iu.test(trimmed);
+  const fragment = words(trimmed).length < 4 && !/^(?:thank you|understood|certainly|of course)[.!]?$/iu.test(trimmed);
+  const unpolished = !startsWithCapital(trimmed) && !endsWithPunctuation(trimmed);
+  const risk = vague || fragment || unpolished;
+  return { risk, helper: risk ? "State the issue or next step more specifically and completely." : "The message communicates a clear, complete thought." };
+}
+
+function toneAssessment(message: string): CommunicationAssessment {
+  const risk = /\b(?:shut up|calm down|not my problem|none of my concern|whatever|ridiculous|stupid|idiot|deal with it|stop complaining|your fault)\b/iu.test(message);
+  return { risk, helper: risk ? "Use calm, respectful language that keeps ownership with the learner." : "The tone remains calm and professionally appropriate." };
+}
+
+function wordChoiceAssessment(message: string): CommunicationAssessment {
+  const risk = /\b(?:gonna|wanna|yeah|yep|nope|chill|whatever|not my problem|none of my concern|kinda|sorta|dunno)\b/iu.test(message);
+  return { risk, helper: risk ? "Replace casual or dismissive wording with precise professional language." : "Word choice is suitable for an enterprise conversation." };
+}
+
+const communicationAssessments: Record<CommunicationSignal, (message: string) => CommunicationAssessment> = {
+  Grammar: grammarAssessment,
+  Spelling: spellingAssessment,
+  Punctuation: punctuationAssessment,
+  "Sentence Clarity": clarityAssessment,
+  "Professional Tone": toneAssessment,
+  "Word Choice": wordChoiceAssessment,
+};
+
+function communicationState(positiveCount: number, riskCount: number): CommunicationState {
+  if (!positiveCount && !riskCount) return "Not observed yet";
+  if (riskCount > positiveCount) return "Needs attention";
+  if (riskCount === positiveCount) return "Developing";
+  if (riskCount > 0) return "Good";
+  if (positiveCount >= 3) return "Excellent";
+  if (positiveCount >= 1) return "Strong";
+  return "Good";
+}
+
+export function deriveCommunicationIndicators(learnerMessages: readonly string[]): CommunicationIndicator[] {
+  const messages = learnerMessages.map((message) => message.trim()).filter(Boolean);
+  return COMMUNICATION_INTELLIGENCE_SIGNALS.map((signal) => {
+    let positiveCount = 0;
+    let riskCount = 0;
+    let helper = "No learner communication has been observed yet.";
+    for (const message of messages) {
+      const assessment = communicationAssessments[signal](message);
+      helper = assessment.helper;
+      if (assessment.risk) riskCount += 1;
+      else positiveCount += 1;
+    }
+    return { signal, state: communicationState(positiveCount, riskCount), helper, positiveCount, riskCount };
+  });
+}
+
+export function deriveLiveEvaluationIntelligence(learnerMessages: readonly string[]) {
+  return {
+    behavioral: deriveLiveCoachingIndicators(learnerMessages),
+    communication: deriveCommunicationIndicators(learnerMessages),
+  };
+}
+
+export const communicationQualityState = communicationState;

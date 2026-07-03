@@ -34,6 +34,8 @@ test("premium report composes every evidence-backed section from existing sessio
 test("capability snapshot uses qualitative states rather than raw percentages", () => {
   const report = buildPremiumReport(session);
   assert.equal(report.capabilitySnapshot.length, 6);
+  assert.equal(report.communicationSnapshot.length, 6);
+  assert.ok(report.communicationSnapshot.every((item) => !item.state.includes("%")));
   assert.ok(report.capabilitySnapshot.every((item) => !item.state.includes("%")));
   assert.equal(qualitativePerformance(89), "Strong");
   assert.equal(qualitativePerformance(77), "Consistent");

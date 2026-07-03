@@ -4,6 +4,7 @@ import type {
   SimulationSessionResponse,
 } from "@simforge/shared";
 import {
+  deriveCommunicationIndicators,
   deriveLiveCoachingIndicators,
 } from "./live-evaluation";
 
@@ -88,6 +89,7 @@ export function buildPremiumReport(session: SimulationSessionResponse) {
   const evaluation = session.evaluation;
   const learners = learnerMessages(session.messages);
   const liveSnapshot = deriveLiveCoachingIndicators(learners.map((message) => message.content));
+  const communicationSnapshot = deriveCommunicationIndicators(learners.map((message) => message.content));
   const sortedScores = [...session.capabilityScores].sort((left, right) => right.score - left.score);
   const strongest = sortedScores[0];
   const priority = sortedScores.at(-1);
@@ -155,6 +157,7 @@ export function buildPremiumReport(session: SimulationSessionResponse) {
         ? qualitativePerformance(scoreForCapability(session.capabilityScores, item.capability)!)
         : item.state,
     })),
+    communicationSnapshot,
     timeline,
     observations,
     strengths: strengthDetails,

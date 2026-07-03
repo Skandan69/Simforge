@@ -21,7 +21,7 @@ import type {
 import { ApiError, apiBlob, apiFetch } from "@/lib/api";
 import { resolveSophiaAvatarState } from "@/lib/sophia-avatar";
 import { startSophiaLipSync } from "@/lib/sophia-lip-sync";
-import { deriveLiveCoachingIndicators } from "@/lib/live-evaluation";
+import { deriveLiveEvaluationIntelligence } from "@/lib/live-evaluation";
 import {
   conversationRoleLabel,
   visibleConversationMessages,
@@ -99,8 +99,8 @@ export function SophiaSimulationRun({
     () => visibleConversationMessages(messages),
     [messages],
   );
-  const liveCoachingIndicators = useMemo(
-    () => deriveLiveCoachingIndicators(
+  const liveIntelligence = useMemo(
+    () => deriveLiveEvaluationIntelligence(
       messages.filter((message) => message.role === "learner").map((message) => message.content),
     ),
     [messages],
@@ -408,7 +408,7 @@ export function SophiaSimulationRun({
           </div>}
         />
         <aside className="order-3 space-y-4 lg:col-start-2 lg:row-span-2 lg:row-start-1" aria-label="Simulation guidance">
-          <LiveCoachingPanel indicators={liveCoachingIndicators} />
+          <LiveCoachingPanel behavioralIndicators={liveIntelligence.behavioral} communicationIndicators={liveIntelligence.communication} />
           <Card>
             <CardHeader><CardTitle className="flex items-center gap-2 text-base"><ShieldCheck className="size-4 text-primary" />Coaching tip</CardTitle></CardHeader>
             <CardContent><p className="text-sm leading-6 text-muted-foreground">Respond naturally, use specific evidence, and make your next action clear. Personalized coaching appears in the final report.</p></CardContent>

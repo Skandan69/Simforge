@@ -20,9 +20,10 @@ test("runtime keeps controls accessible and guidance in the right rail", () => {
 });
 
 test("runtime derives live coaching from persisted learner turns", () => {
-  assert.match(source, /deriveLiveCoachingIndicators/u);
+  assert.match(source, /deriveLiveEvaluationIntelligence/u);
   assert.match(source, /message\.role === "learner"/u);
-  assert.match(source, /<LiveCoachingPanel indicators=\{liveCoachingIndicators\}/u);
+  assert.match(source, /behavioralIndicators=\{liveIntelligence\.behavioral\}/u);
+  assert.match(source, /communicationIndicators=\{liveIntelligence\.communication\}/u);
 });
 
 test("finishing evaluates before navigating and leaves coaching to the report", () => {

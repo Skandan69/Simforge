@@ -20,5 +20,6 @@ test("premium report is printable, responsive, and evidence-forward", () => {
   assert.match(source, /print:hidden/u);
   assert.match(source, /lg:grid-cols/u);
   assert.match(source, /<EvidenceQuote>/u);
+  assert.match(source, /Communication Quality/u);
   assert.match(source, /aria-label="Premium simulation report"/u);
 });
