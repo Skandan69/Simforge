@@ -2,29 +2,33 @@
 
 import { useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, BrainCircuit, CheckCircle2, Lightbulb, Loader2, Minus, Target } from "lucide-react";
-import type { SimulationCoachingInsightResponse } from "@simforge/shared";
+import type { SimulationCoachingInsightResponse, SimulationSessionResponse } from "@simforge/shared";
 import { ApiError, apiFetch } from "@/lib/api";
+import { buildReportCoachingFallback } from "@/lib/premium-report";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
-export function SimulationCoachingInsight({ sessionId }: { sessionId: string }) {
+export function SimulationCoachingInsight({ sessionId, session }: { sessionId: string; session: SimulationSessionResponse }) {
   const [insight, setInsight] = useState<SimulationCoachingInsightResponse>();
-  const [error, setError] = useState<string>();
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let active = true;
     const load = async () => {
       try { return await apiFetch<SimulationCoachingInsightResponse>(`/api/simulation-sessions/${sessionId}/coach`); }
       catch (caught) {
-        if (caught instanceof ApiError && caught.status === 404) return apiFetch<SimulationCoachingInsightResponse>(`/api/simulation-sessions/${sessionId}/coach`, { method: "POST" });
+        if (caught instanceof ApiError && (caught.status === 404 || caught.status >= 500)) return apiFetch<SimulationCoachingInsightResponse>(`/api/simulation-sessions/${sessionId}/coach`, { method: "POST" });
         throw caught;
       }
     };
-    void load().then((result) => { if (active) setInsight(result); }).catch((caught: unknown) => { if (active) setError(caught instanceof Error ? caught.message : "Unable to prepare coaching guidance."); });
+    void load().then((result) => { if (active) setInsight(result); }).catch(() => { if (active) setFailed(true); });
     return () => { active = false; };
   }, [sessionId]);
 
-  if (error) return <Card><CardHeader><CardTitle className="text-base">AI Coach</CardTitle></CardHeader><CardContent><p className="text-sm text-muted-foreground">Coaching guidance is not available for this report.</p><p className="mt-1 text-xs text-destructive">{error}</p></CardContent></Card>;
+  if (failed) {
+    const fallback = buildReportCoachingFallback(session);
+    return <Card className="border-primary/25"><CardHeader><CardTitle className="flex items-center gap-2"><BrainCircuit className="size-5 text-primary" />AI Coach</CardTitle><CardDescription>Deterministic coaching prepared from the saved evaluation.</CardDescription></CardHeader><CardContent className="space-y-4"><p className="text-sm leading-6">{fallback.summary}</p><div><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Strength</p><p className="mt-1 text-sm">{fallback.strength}</p></div><div><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Priority improvement</p><p className="mt-1 text-sm">{fallback.improvement}</p></div><div className="rounded-lg bg-muted/40 p-3"><p className="text-xs font-semibold">Better response example</p><p className="mt-1 text-sm leading-6">“{fallback.betterResponse}”</p></div><div><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Next practice focus</p><p className="mt-1 text-sm">{fallback.nextPractice}</p></div></CardContent></Card>;
+  }
   if (!insight) return <Card><CardContent className="flex items-center gap-3 p-6 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin text-primary" />Preparing evidence-based coaching…</CardContent></Card>;
 
   return <section className="space-y-5">

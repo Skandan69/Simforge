@@ -19,3 +19,10 @@ test("live coaching panel renders qualitative indicators and authoritative-repor
 test("live coaching panel provides an accessible region", () => {
   assert.match(source, /aria-label="Live coaching indicators"/u);
 });
+
+test("communication feedback can be hidden without hiding behavioral intelligence", () => {
+  assert.match(source, /aria-pressed=\{showCommunication\}/u);
+  assert.match(source, /showCommunication \? \(/u);
+  assert.match(source, /Behavioral Intelligence/u);
+  assert.match(source, /Behavioral coaching remains active/u);
+});

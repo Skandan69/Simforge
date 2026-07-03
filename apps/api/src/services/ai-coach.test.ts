@@ -18,8 +18,10 @@ test("coaching output is concise, evidence-based, and actionable", () => {
   assert.ok(result.strengths.length <= 3);
   assert.ok(result.improvementAreas.length <= 3);
   assert.equal(result.nextBestAction.capability, "Decision Making");
-  assert.match(result.strengths[0]!.evidence, /Learner response evidence/u);
+  assert.equal(result.strengths.length, 1);
+  assert.match(result.strengths[0]!.evidence, /Communication was observed/u);
   assert.match(result.estimatedImprovement.disclaimer, /Estimate only/u);
+  assert.match(result.improvementAreas[0]!.recommendation, /Better response example/u);
   assert.equal(result.generatedBy, "DETERMINISTIC");
 });
 

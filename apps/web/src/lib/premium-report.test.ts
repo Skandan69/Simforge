@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { SimulationSessionResponse } from "@simforge/shared";
-import { buildPremiumReport, qualitativePerformance } from "./premium-report.js";
+import { buildPremiumReport, evidenceForCapability, qualitativePerformance } from "./premium-report.js";
 
 const session: SimulationSessionResponse = {
   id: "session-1", organizationId: "org-1", simulationId: "simulation-1", learnerId: "learner-1", status: "COMPLETED", startedAt: "2026-01-01T10:00:00.000Z", completedAt: "2026-01-01T10:10:00.000Z", overallScore: 76, createdAt: "2026-01-01T10:00:00.000Z", updatedAt: "2026-01-01T10:10:00.000Z",
@@ -48,4 +48,21 @@ test("conversation timeline highlights meaningful moments instead of replaying e
   assert.ok(report.timeline.length <= 6);
   assert.ok(report.timeline.length < session.messages.length + 1);
   assert.ok(report.timeline.every((moment) => moment.evidence.length > 0));
+});
+
+test("generic reassurance is not reused for unrelated capability evidence", () => {
+  const messages = [{ id: "reassurance", sessionId: "session-1", role: "learner" as const, content: "sure dont worry i am here to help you, i will definitely try and resolve this issue for you.", createdAt: "2026-01-01T10:03:00.000Z" }];
+  assert.match(evidenceForCapability(messages, "Empathy"), /dont worry/u);
+  assert.match(evidenceForCapability(messages, "Communication"), /here to help/u);
+  assert.equal(evidenceForCapability(messages, "Product Knowledge"), "No strong evidence observed.");
+  assert.equal(evidenceForCapability(messages, "Policy Compliance"), "No strong evidence observed.");
+  assert.equal(evidenceForCapability(messages, "Decision Making"), "No strong evidence observed.");
+});
+
+test("knowledge usage stays not observed and missed opportunities include a better response", () => {
+  const reassuranceOnly = { ...session, messages: session.messages.filter((message) => message.role !== "learner").concat({ id: "m4", sessionId: session.id, role: "learner", content: "I am here to help and will try to resolve this for you.", createdAt: "2026-01-01T10:04:00.000Z" }) };
+  const report = buildPremiumReport(reassuranceOnly);
+  assert.equal(report.knowledgeUsage.state, "Not observed yet");
+  assert.equal(report.knowledgeUsage.evidence, "No strong evidence observed.");
+  assert.ok(report.missedOpportunities.every((item) => item.betterResponse.length > 20));
 });

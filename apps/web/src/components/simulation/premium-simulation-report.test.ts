@@ -23,3 +23,9 @@ test("premium report is printable, responsive, and evidence-forward", () => {
   assert.match(source, /Communication Quality/u);
   assert.match(source, /aria-label="Premium simulation report"/u);
 });
+
+test("premium report respects the communication feedback preference", () => {
+  assert.match(source, /Communication feedback:/u);
+  assert.match(source, /communicationIntelligenceVisible &&/u);
+  assert.match(source, /aria-pressed=\{communicationIntelligenceVisible\}/u);
+});

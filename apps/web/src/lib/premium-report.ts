@@ -69,15 +69,44 @@ function learnerMessages(messages: SimulationMessageResponse[]) {
   return messages.filter((message) => message.role === "learner");
 }
 
-function evidenceForCapability(messages: SimulationMessageResponse[], capability: string) {
-  const learners = learnerMessages(messages);
-  for (const message of learners) {
-    const indicator = deriveLiveCoachingIndicators([message.content]).find(
-      (item) => item.capability === capability,
-    );
-    if (indicator && (indicator.evidenceCount || indicator.riskCount)) return excerpt(message.content);
-  }
-  return learners[0] ? excerpt(learners[0].content) : "No learner statement was available for this observation.";
+const capabilityEvidencePatterns: Record<string, RegExp> = {
+  Empathy: /\b(?:understand|sorry|appreciate|frustrat|upset|concern|hear you|reassure|don(?:'t|t| not) worry)\b/iu,
+  Verification: /\b(?:verify|confirm|identity|account|order|transaction|charge dates?|amounts?|email|phone|address|details?)\b/iu,
+  "Policy Compliance": /\b(?:policy|procedure|eligib|approval|authoriz|escalat|documented guidance|required|must verify|before (?:approving|processing|confirming))\b/iu,
+  "Knowledge Usage": /\b(?:policy|procedure|knowledge base|documented guidance|refund rules?|return window|eligib|service agreement|company process)\b/iu,
+  "Product Knowledge": /\b(?:product|feature|subscription|plan|coverage|service agreement|refund rules?|return window|eligib|account type)\b/iu,
+  "Decision Making": /\b(?:because|therefore|based on|after (?:confirming|verifying|reviewing)|before (?:deciding|approving|processing)|the next step|available options?|i (?:will|would) (?:escalate|approve|decline))\b/iu,
+  "Problem Solving": /\b(?:first.+then|investigat|root cause|available options?|identify (?:the )?(?:issue|cause)|after (?:confirming|verifying).+(?:resolve|next step))\b/iu,
+  Confidence: /\b(?:i will|i can help|i(?:'ll| will) make sure|the next step|let me (?:verify|confirm|check|review))\b/iu,
+  "Active Listening": /\b(?:if i understand|let me make sure|you mentioned|what i(?:'m| am) hearing|is that correct|could you clarify)\b/iu,
+  Communication: /\S+(?:\s+\S+){3,}/u,
+};
+
+export function evidenceForCapability(messages: SimulationMessageResponse[], capability: string) {
+  const pattern = capabilityEvidencePatterns[capability];
+  if (!pattern) return "No strong evidence observed.";
+  const match = learnerMessages(messages).find((message) => pattern.test(message.content));
+  return match ? excerpt(match.content) : "No strong evidence observed.";
+}
+
+export function betterResponseFor(capability: string) {
+  if (capability === "Empathy") return "I understand how frustrating this has been. Let me confirm the details so I can help with the right next step.";
+  if (["Policy Compliance", "Product Knowledge", "Decision Making", "Verification"].includes(capability)) return "I can help with this. Before confirming the outcome, may I verify the dates and amounts of both charges?";
+  if (capability === "Problem Solving") return "Let me confirm what happened first, then I will explain the available options and the next step.";
+  return "I understand the concern. I will verify the relevant details and explain the next step clearly.";
+}
+
+export function buildReportCoachingFallback(session: SimulationSessionResponse) {
+  const ranked = [...session.capabilityScores].sort((left, right) => right.score - left.score);
+  const strongest = ranked[0];
+  const priority = ranked.at(-1);
+  return {
+    summary: `Based on the saved evaluation, ${strongest?.capabilityName ?? "one capability"} showed the clearest evidence. The next priority is ${priority?.capabilityName ?? "a more structured response"}.`,
+    strength: strongest?.evidence ?? session.evaluation?.strengths[0] ?? "The learner completed an assessable practice conversation.",
+    improvement: priority?.recommendation ?? session.evaluation?.improvementAreas[0] ?? "Verify relevant details before committing to an outcome.",
+    betterResponse: betterResponseFor(priority?.capabilityName ?? "Communication"),
+    nextPractice: session.evaluation?.recommendedNextPractice ?? "Repeat the scenario with a clear verification step and explicit next action.",
+  };
 }
 
 function scoreForCapability(scores: CapabilityScoreResponse[], capability: string) {
@@ -91,7 +120,7 @@ export function buildPremiumReport(session: SimulationSessionResponse) {
   const liveSnapshot = deriveLiveCoachingIndicators(learners.map((message) => message.content));
   const communicationSnapshot = deriveCommunicationIndicators(learners.map((message) => message.content));
   const sortedScores = [...session.capabilityScores].sort((left, right) => right.score - left.score);
-  const strongest = sortedScores[0];
+  const strongest = sortedScores.find((score) => evidenceForCapability(session.messages, score.capabilityName) !== "No strong evidence observed.");
   const priority = sortedScores.at(-1);
   const overallRating = qualitativePerformance(evaluation.overallScore);
 
@@ -121,13 +150,10 @@ export function buildPremiumReport(session: SimulationSessionResponse) {
     };
   });
 
-  const strengthDetails = evaluation.strengths.slice(0, 3).map((strength, index) => {
-    const score = sortedScores[index] ?? strongest;
-    return {
-      title: strength,
-      capability: score?.capabilityName ?? "Observed behaviour",
-      evidence: score ? evidenceForCapability(session.messages, score.capabilityName) : evidenceForCapability(session.messages, "Communication"),
-    };
+  const supportedScores = sortedScores.filter((candidate) => evidenceForCapability(session.messages, candidate.capabilityName) !== "No strong evidence observed.");
+  const strengthDetails = evaluation.strengths.slice(0, 3).flatMap((strength, index) => {
+    const score = supportedScores[index];
+    return score ? [{ title: strength, capability: score.capabilityName, evidence: evidenceForCapability(session.messages, score.capabilityName) }] : [];
   });
   const missedOpportunities = evaluation.improvementAreas.slice(0, 3).map((area, index) => {
     const score = [...sortedScores].reverse()[index] ?? priority;
@@ -136,18 +162,19 @@ export function buildPremiumReport(session: SimulationSessionResponse) {
       capability: score?.capabilityName ?? "Priority behaviour",
       evidence: score ? evidenceForCapability(session.messages, score.capabilityName) : evidenceForCapability(session.messages, "Communication"),
       recommendation: score?.recommendation ?? evaluation.recommendedNextPractice,
+      betterResponse: betterResponseFor(score?.capabilityName ?? "Communication"),
     };
   });
 
   const knowledge = liveSnapshot.find((item) => item.capability === "Knowledge Usage")!;
   const policy = liveSnapshot.find((item) => item.capability === "Policy Compliance")!;
-  const knowledgeEvidence = evidenceForCapability(session.messages, knowledge.evidenceCount || knowledge.riskCount ? "Knowledge Usage" : "Policy Compliance");
+  const knowledgeEvidence = evidenceForCapability(session.messages, "Knowledge Usage");
 
   return {
     overallRating,
     executiveSummary: {
       overview: `${overallRating} performance across the completed ${session.simulation.title} simulation.`,
-      primaryStrength: strongest ? `${strongest.capabilityName}: ${strongest.evidence}` : evaluation.strengths[0],
+      primaryStrength: strongest ? `${strongest.capabilityName}: ${strongest.evidence}` : "No single capability had strong transcript evidence in this attempt.",
       priorityArea: priority ? `${priority.capabilityName}: ${priority.recommendation}` : evaluation.improvementAreas[0],
       coachingFocus: evaluation.recommendedNextPractice,
     },

@@ -249,7 +249,7 @@ export function SimulationCapabilityReport({
           </CardContent>
         </Card>
       </div>
-      <SimulationCoachingInsight sessionId={session.id} />
+      <SimulationCoachingInsight sessionId={session.id} session={session} />
       <div className="rounded-xl border border-dashed p-4 text-center text-xs text-muted-foreground">
         Evaluation uses the configured Sophia provider when available, with a
         deterministic fallback to keep the simulation workflow reliable.

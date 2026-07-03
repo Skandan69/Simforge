@@ -23,7 +23,7 @@ const communicationStateStyle: Record<CommunicationState, string> = {
   "Needs attention": stateStyle["Needs attention"],
 };
 
-export function LiveCoachingPanel({ behavioralIndicators, communicationIndicators }: { behavioralIndicators: LiveCoachingIndicator[]; communicationIndicators: CommunicationIndicator[] }) {
+export function LiveCoachingPanel({ behavioralIndicators, communicationIndicators, showCommunication, onShowCommunicationChange }: { behavioralIndicators: LiveCoachingIndicator[]; communicationIndicators: CommunicationIndicator[]; showCommunication: boolean; onShowCommunicationChange: (visible: boolean) => void }) {
   return (
     <Card className="border-slate-700/50 bg-slate-950 text-slate-100" aria-label="Live coaching indicators">
       <CardHeader className="pb-3">
@@ -52,7 +52,8 @@ export function LiveCoachingPanel({ behavioralIndicators, communicationIndicator
           </div>
         </section>
         <section className="border-t border-slate-700 pt-4" aria-labelledby="communication-intelligence">
-          <h3 id="communication-intelligence" className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Communication Intelligence</h3>
+          <div className="mb-2 flex items-center justify-between gap-2"><h3 id="communication-intelligence" className="text-xs font-semibold uppercase tracking-wider text-slate-400">Communication Intelligence</h3><button type="button" className="rounded-md border border-slate-700 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-900" aria-pressed={showCommunication} onClick={() => onShowCommunicationChange(!showCommunication)}>{showCommunication ? "On" : "Off"}</button></div>
+          {showCommunication ? (
           <div className="space-y-2">
             {communicationIndicators.map((indicator) => (
               <div key={indicator.signal} className="border-t border-slate-800 py-2 first:border-0 first:pt-0">
@@ -64,6 +65,7 @@ export function LiveCoachingPanel({ behavioralIndicators, communicationIndicator
               </div>
             ))}
           </div>
+          ) : <p className="text-xs leading-5 text-slate-500">Communication feedback is hidden. Behavioral coaching remains active.</p>}
         </section>
       </CardContent>
     </Card>

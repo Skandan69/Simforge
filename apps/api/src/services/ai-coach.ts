@@ -12,13 +12,17 @@ export interface CoachingInput {
   blueprint: null | { successDefinition: string; nonNegotiables: string };
 }
 
-const excerpt = (messages: string[]) => messages.at(-1)?.replace(/\s+/gu, " ").trim().slice(0, 180) ?? "No learner response excerpt was available.";
+export function betterResponseExample(capability: WorkforceCapability) {
+  if (capability === "Empathy") return "I understand how frustrating this has been. I will first confirm the details so I can explain the right next step.";
+  if (capability === "Policy Compliance" || capability === "Product Knowledge" || capability === "Decision Making") return "I can help with this. Before confirming the outcome, may I verify the dates and amounts of both charges?";
+  if (capability === "Problem Solving") return "Let me confirm what happened first, then I will explain the available options and the next step.";
+  return "I understand the concern. I will verify the relevant details and then explain the next step clearly.";
+}
 
 export function buildDeterministicCoaching(input: CoachingInput): CoachingOutput {
   const ranked = [...input.capabilityScores].sort((a, b) => b.score - a.score);
-  const behavior = excerpt(input.learnerMessages);
-  const strengths = ranked.slice(0, 3).map((score) => ({ title: `${score.capabilityName} evidence`, evidence: `${score.evidence} Learner response evidence: “${behavior}”`, capability: score.capabilityName }));
-  const improvementAreas = [...ranked].reverse().slice(0, 3).map((score) => ({ title: `Strengthen ${score.capabilityName}`, evidence: `${score.capabilityName} scored ${Math.round(score.score)} in this session. ${score.evidence}`, recommendation: score.recommendation, capability: score.capabilityName }));
+  const strengths = ranked.slice(0, 1).map((score) => ({ title: `${score.capabilityName} evidence`, evidence: score.evidence, capability: score.capabilityName }));
+  const improvementAreas = [...ranked].reverse().slice(0, 3).map((score) => ({ title: `Strengthen ${score.capabilityName}`, evidence: `${score.capabilityName} scored ${Math.round(score.score)} in this session. ${score.evidence}`, recommendation: `${score.recommendation} Better response example: “${betterResponseExample(score.capabilityName)}”`, capability: score.capabilityName }));
   const weakest = improvementAreas[0] ?? { capability: "Communication" as const, title: "Strengthen Communication", recommendation: input.evaluation.recommendedNextPractice };
   const knowledgeGaps = improvementAreas.flatMap((area) => {
     const section = input.knowledgeSections.find((item) => item.capabilities.includes(area.capability));

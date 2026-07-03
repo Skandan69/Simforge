@@ -22,6 +22,7 @@ import { ApiError, apiBlob, apiFetch } from "@/lib/api";
 import { resolveSophiaAvatarState } from "@/lib/sophia-avatar";
 import { startSophiaLipSync } from "@/lib/sophia-lip-sync";
 import { deriveLiveEvaluationIntelligence } from "@/lib/live-evaluation";
+import { useCommunicationIntelligence } from "@/hooks/use-communication-intelligence";
 import {
   conversationRoleLabel,
   visibleConversationMessages,
@@ -47,6 +48,7 @@ export function SophiaSimulationRun({
   autoStart?: boolean;
 }) {
   const router = useRouter();
+  const { communicationIntelligenceVisible, setCommunicationIntelligenceVisible } = useCommunicationIntelligence();
   const endRef = useRef<HTMLDivElement>(null);
   const autoStartHandled = useRef(false);
   const recorderRef = useRef<MediaRecorder | undefined>(undefined);
@@ -408,7 +410,7 @@ export function SophiaSimulationRun({
           </div>}
         />
         <aside className="order-3 space-y-4 lg:col-start-2 lg:row-span-2 lg:row-start-1" aria-label="Simulation guidance">
-          <LiveCoachingPanel behavioralIndicators={liveIntelligence.behavioral} communicationIndicators={liveIntelligence.communication} />
+          <LiveCoachingPanel behavioralIndicators={liveIntelligence.behavioral} communicationIndicators={liveIntelligence.communication} showCommunication={communicationIntelligenceVisible} onShowCommunicationChange={setCommunicationIntelligenceVisible} />
           <Card>
             <CardHeader><CardTitle className="flex items-center gap-2 text-base"><ShieldCheck className="size-4 text-primary" />Coaching tip</CardTitle></CardHeader>
             <CardContent><p className="text-sm leading-6 text-muted-foreground">Respond naturally, use specific evidence, and make your next action clear. Personalized coaching appears in the final report.</p></CardContent>
