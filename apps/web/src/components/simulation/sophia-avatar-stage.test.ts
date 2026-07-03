@@ -6,11 +6,12 @@ import { SophiaAvatarFallback, SophiaAvatarStage } from "./sophia-avatar-stage.j
 
 test("Sophia avatar stage renders the local asset and accessible runtime status", () => {
   const controls = createElement("button", { "aria-label": "Mute Sophia" }, "Mute");
-  const markup = renderToStaticMarkup(createElement(SophiaAvatarStage, { state: "speaking", controls }));
+  const markup = renderToStaticMarkup(createElement(SophiaAvatarStage, { state: "speaking", controls, mouthOpen: 0.7 }));
   assert.match(markup, /sophia-avatar-v1\.png/u);
   assert.match(markup, /Sophia is speaking/u);
   assert.match(markup, /aria-live="polite"/u);
   assert.match(markup, /aria-label="Mute Sophia"/u);
+  assert.match(markup, /scaleY\(/u);
 });
 
 test("Sophia avatar fallback preserves a usable non-avatar identity", () => {

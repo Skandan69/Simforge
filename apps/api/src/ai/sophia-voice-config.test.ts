@@ -5,7 +5,8 @@ import { DEFAULT_SOPHIA_TTS_VOICE, resolveSophiaVoiceConfig } from "./sophia-voi
 test("Sophia defaults to the central enterprise-friendly voice", () => {
   const config = resolveSophiaVoiceConfig({});
   assert.equal(config.voice, DEFAULT_SOPHIA_TTS_VOICE);
-  assert.match(config.instructions, /warm, professional, clear feminine voice/u);
+  assert.match(config.instructions, /female professional in her late twenties/u);
+  assert.match(config.instructions, /clear international English/u);
 });
 
 test("Sophia voice supports env override precedence without code changes", () => {

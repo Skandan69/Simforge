@@ -1,5 +1,5 @@
 export const DEFAULT_SOPHIA_TTS_VOICE = "coral";
-export const DEFAULT_SOPHIA_TTS_INSTRUCTIONS = "Speak with a warm, professional, clear feminine voice suitable for an enterprise simulation. Sound natural and fully in character.";
+export const DEFAULT_SOPHIA_TTS_INSTRUCTIONS = "Speak as a warm, confident female professional in her late twenties. Use clear international English, friendly energy, natural pauses, varied but calm intonation, and a measured conversational pace. Sound emotionally intelligent and fully in character, never robotic or theatrical.";
 
 export function resolveSophiaVoiceConfig(input: {
   SOPHIA_TTS_VOICE?: string;

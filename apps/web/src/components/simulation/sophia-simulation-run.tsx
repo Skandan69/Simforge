@@ -20,6 +20,7 @@ import type {
 } from "@simforge/shared";
 import { apiBlob, apiFetch } from "@/lib/api";
 import { resolveSophiaAvatarState } from "@/lib/sophia-avatar";
+import { startSophiaLipSync } from "@/lib/sophia-lip-sync";
 import {
   conversationRoleLabel,
   visibleConversationMessages,
@@ -54,6 +55,7 @@ export function SophiaSimulationRun({
   const recordingTimerRef = useRef<number | undefined>(undefined);
   const audioRef = useRef<HTMLAudioElement | undefined>(undefined);
   const audioUrlRef = useRef<string | undefined>(undefined);
+  const stopLipSyncRef = useRef<(() => void) | undefined>(undefined);
   const [configuration, setConfiguration] =
     useState<SimulationRunConfiguration>();
   const [session, setSession] = useState<SimulationSessionResponse>();
@@ -64,6 +66,7 @@ export function SophiaSimulationRun({
   const [sending, setSending] = useState(false);
   const [evaluating, setEvaluating] = useState(false);
   const [voiceState, setVoiceState] = useState<VoiceState>("Ready");
+  const [mouthOpen, setMouthOpen] = useState(0);
   const [recordingDurationMs, setRecordingDurationMs] = useState(0);
   const [voiceError, setVoiceError] = useState<string>();
   const [muted, setMuted] = useState(false);
@@ -101,6 +104,7 @@ export function SophiaSimulationRun({
     if (recordingTimerRef.current) window.clearInterval(recordingTimerRef.current);
     recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
     audioRef.current?.pause();
+    stopLipSyncRef.current?.();
     if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
   }, []);
   const start = useCallback(async () => {
@@ -146,14 +150,24 @@ export function SophiaSimulationRun({
       audioUrlRef.current = url;
       const player = new Audio(url);
       audioRef.current = player;
-      player.onended = () => setVoiceState("Ready");
+      stopLipSyncRef.current?.();
+      stopLipSyncRef.current = await startSophiaLipSync(player, setMouthOpen);
+      player.onended = () => {
+        stopLipSyncRef.current?.();
+        stopLipSyncRef.current = undefined;
+        setVoiceState("Ready");
+      };
       player.onerror = () => {
+        stopLipSyncRef.current?.();
+        stopLipSyncRef.current = undefined;
         setVoiceState("Error");
         setVoiceError("Sophia audio could not be played. Her text response is still available.");
       };
       await player.play();
       setLastSophiaMessageId(messageId);
     } catch (caught) {
+      stopLipSyncRef.current?.();
+      stopLipSyncRef.current = undefined;
       setVoiceState("Error");
       setVoiceError(caught instanceof Error ? caught.message : "Sophia audio is unavailable. Continue with text.");
     }
@@ -228,6 +242,8 @@ export function SophiaSimulationRun({
     setMuted((current) => {
       if (!current) {
         audioRef.current?.pause();
+        stopLipSyncRef.current?.();
+        stopLipSyncRef.current = undefined;
         setVoiceState("Ready");
       }
       return !current;
@@ -342,6 +358,7 @@ export function SophiaSimulationRun({
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_300px] lg:gap-5">
         <SophiaAvatarStage
           state={avatarState}
+          mouthOpen={mouthOpen}
           controls={<div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-center">
             <Button
               type="button"

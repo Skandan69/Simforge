@@ -100,3 +100,40 @@ body {
   font-family: Arial, Helvetica, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+
+@keyframes sophia-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.004) translateY(-1px); }
+}
+
+@keyframes sophia-head-presence {
+  0%, 100% { transform: scale(1.006) translateX(0); }
+  35% { transform: scale(1.009) translateX(-1px) rotate(-0.08deg); }
+  70% { transform: scale(1.007) translateX(1px) rotate(0.08deg); }
+}
+
+.sophia-presence-image[data-state="idle"] {
+  animation: sophia-breathe 7s ease-in-out infinite;
+}
+
+.sophia-presence-image[data-state="listening"] {
+  transform: scale(1.006);
+}
+
+.sophia-presence-image[data-state="thinking"] {
+  animation: sophia-head-presence 8s ease-in-out infinite;
+}
+
+.sophia-presence-image[data-state="speaking"] {
+  animation: sophia-head-presence 5.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sophia-presence-image {
+    animation: none !important;
+    transform: none !important;
+  }
+  .sophia-eyelids {
+    display: none;
+  }
+}

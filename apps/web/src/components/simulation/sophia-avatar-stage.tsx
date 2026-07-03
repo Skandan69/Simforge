@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Sparkles, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SOPHIA_AVATAR_PRESENTATION, type SophiaAvatarState } from "@/lib/sophia-avatar";
+import { useSophiaPresence } from "@/hooks/use-sophia-presence";
 
 export function SophiaAvatarFallback() {
   return <div className="grid h-full place-items-center bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 p-8 text-center text-white" role="img" aria-label="Sophia, AI simulation trainer">
@@ -12,12 +13,15 @@ export function SophiaAvatarFallback() {
   </div>;
 }
 
-export function SophiaAvatarStage({ state, controls }: { state: SophiaAvatarState; controls: React.ReactNode }) {
+export function SophiaAvatarStage({ state, controls, mouthOpen = 0 }: { state: SophiaAvatarState; controls: React.ReactNode; mouthOpen?: number }) {
   const [failed, setFailed] = useState(false);
+  const { blinking } = useSophiaPresence(state);
   const presentation = SOPHIA_AVATAR_PRESENTATION[state];
   return <section className="overflow-hidden rounded-2xl border border-slate-700/70 bg-slate-950 shadow-2xl shadow-slate-950/20" aria-label="Sophia avatar">
     <div className="relative min-h-[340px] overflow-hidden sm:min-h-[400px] lg:min-h-[420px]">
-      {failed ? <SophiaAvatarFallback /> : <Image src="/assets/sophia/sophia-avatar-v1.png" alt="Sophia, professional AI simulation trainer" fill sizes="(max-width: 1024px) 100vw, 70vw" className={cn("object-cover object-top transition-transform duration-700", state === "speaking" && "scale-[1.015] animate-[pulse_2.2s_ease-in-out_infinite]", state === "listening" && "scale-[1.01]", state === "thinking" && "brightness-90")} onError={() => setFailed(true)} />}
+      {failed ? <SophiaAvatarFallback /> : <Image src="/assets/sophia/sophia-avatar-v1.png" alt="Sophia, professional AI simulation trainer" fill sizes="(max-width: 1024px) 100vw, 70vw" data-state={state} className={cn("sophia-presence-image object-cover object-top transition-[filter,transform] duration-700", state === "thinking" && "brightness-90")} onError={() => setFailed(true)} />}
+      {!failed && <div className={cn("sophia-eyelids pointer-events-none absolute inset-0 transition-opacity duration-75", blinking ? "opacity-100" : "opacity-0")} aria-hidden="true"><span className="absolute left-[43.5%] top-[48%] h-[3px] w-[5.5%] rounded-full bg-slate-950/70 sm:top-[50%] lg:top-[52%]" /><span className="absolute right-[43.5%] top-[48%] h-[3px] w-[5.5%] rounded-full bg-slate-950/70 sm:top-[50%] lg:top-[52%]" /></div>}
+      {!failed && state === "speaking" && <span className="pointer-events-none absolute left-1/2 top-[61%] h-2 w-7 -translate-x-1/2 rounded-[50%] bg-rose-950/45 shadow-[0_0_5px_rgba(30,10,15,0.3)] transition-transform duration-75 sm:top-[63%] lg:top-[65%]" style={{ transform: `translateX(-50%) scaleY(${0.35 + Math.min(1, mouthOpen) * 1.15})` }} aria-hidden="true" />}
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-slate-950/10" />
       {state === "speaking" && <div className="pointer-events-none absolute inset-5 rounded-2xl border border-cyan-300/35 animate-pulse" />}
       {state === "listening" && <div className="pointer-events-none absolute inset-x-12 bottom-28 h-px bg-cyan-300 shadow-[0_0_28px_8px_rgba(103,232,249,0.35)] animate-pulse" />}
