@@ -24,6 +24,7 @@ import { loadSophiaPromptContext } from "../ai/sophia-context.js";
 import { generateSophiaEvaluation, generateSophiaReply } from "../ai/sophia-service.js";
 import type { AIConversationMessage } from "../ai/types.js";
 import { getVoiceProviders } from "../ai/voice-provider.js";
+import { transcriptionFailureMessage, validateVoiceRecording, VoiceRecordingError } from "../services/voice-recording.js";
 
 const sessionIdSchema = z.string().uuid();
 const includeReport = {
@@ -177,30 +178,38 @@ simulationSessionsRouter.post("/:id/messages", async (request, response) => {
   response.status(201).json({ learnerMessage, aiMessage });
 });
 
-const audioTypes = new Set(["audio/webm", "audio/ogg", "audio/mp4", "audio/mpeg", "audio/wav", "audio/x-wav"]);
-const audioExtension = (mimeType: string) => mimeType.includes("ogg") ? "ogg" : mimeType.includes("mp4") ? "m4a" : mimeType.includes("mpeg") ? "mp3" : mimeType.includes("wav") ? "wav" : "webm";
-
 simulationSessionsRouter.post(
   "/:id/voice/transcribe",
-  raw({ type: (request) => audioTypes.has(request.headers["content-type"]?.split(";")[0] ?? ""), limit: getEnv().VOICE_MAX_AUDIO_BYTES }),
+  raw({ type: (request) => request.headers["content-type"]?.toLowerCase().startsWith("audio/") ?? false, limit: getEnv().VOICE_MAX_AUDIO_BYTES }),
   async (request, response) => {
     const { organizationId } = getWorkspaceRequest(request).workspace;
     const user = getWorkspaceRequest(request).authUser;
     const session = await getSession(sessionIdSchema.parse(request.params.id), organizationId);
     if (session.learnerId !== user.id) throw new HttpError("Only the session learner can transcribe audio", 403, "SESSION_VOICE_DENIED");
     if (session.status !== "IN_PROGRESS") throw new HttpError("This simulation session is no longer in progress", 409, "SESSION_NOT_ACTIVE");
-    const mimeType = request.headers["content-type"]?.split(";")[0] ?? "";
-    if (!audioTypes.has(mimeType) || !Buffer.isBuffer(request.body) || !request.body.length) throw new HttpError("A supported audio recording is required", 400, "INVALID_AUDIO");
+    const rawMimeType = request.headers["content-type"] ?? "";
+    const byteSize = Buffer.isBuffer(request.body) ? request.body.length : 0;
+    const durationHeader = request.get("x-audio-duration-ms");
+    const durationValue = durationHeader ? Number(durationHeader) : undefined;
+    const durationMs = durationValue !== undefined && Number.isFinite(durationValue) && durationValue >= 0 ? Math.round(durationValue) : undefined;
+    let recording: { mimeType: string; extension: string };
+    try {
+      recording = validateVoiceRecording({ mimeType: rawMimeType, byteSize, durationMs, minimumBytes: getEnv().VOICE_MIN_AUDIO_BYTES, minimumDurationMs: getEnv().VOICE_MIN_DURATION_MS });
+    } catch (error) {
+      if (error instanceof VoiceRecordingError) throw new HttpError(error.message, 400, error.code);
+      throw error;
+    }
     const provider = getVoiceProviders()?.speechToText;
     if (!provider) throw new HttpError("Voice transcription is not configured. Continue in text mode.", 503, "VOICE_TRANSCRIPTION_UNAVAILABLE");
-    console.info("Sophia voice provider called", { provider: provider.name, operation: "transcription" });
+    const safeMetadata = { provider: provider.name, operation: "transcription", mimeType: recording.mimeType, byteSize, durationMs };
+    console.info("Sophia voice provider called", safeMetadata);
     try {
-      const transcript = await provider.transcribe({ audio: request.body, mimeType, fileName: `recording.${audioExtension(mimeType)}` });
-      console.info("Sophia voice provider succeeded", { provider: provider.name, operation: "transcription" });
+      const transcript = await provider.transcribe({ audio: request.body, mimeType: recording.mimeType, fileName: `recording.${recording.extension}` });
+      console.info("Sophia voice provider succeeded", safeMetadata);
       response.json({ transcript });
     } catch (error) {
-      console.error("Sophia voice provider failed", { provider: provider.name, operation: "transcription", errorType: error instanceof Error ? error.name : "UnknownError" });
-      throw new HttpError("The recording could not be transcribed. Try again or continue in text mode.", 502, "VOICE_TRANSCRIPTION_FAILED");
+      console.error("Sophia voice provider failed", { ...safeMetadata, errorCategory: error instanceof Error && error.name === "AbortError" ? "timeout" : "provider_failure", errorType: error instanceof Error ? error.name : "UnknownError" });
+      throw new HttpError(transcriptionFailureMessage, 502, "VOICE_TRANSCRIPTION_FAILED");
     }
   },
 );

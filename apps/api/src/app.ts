@@ -24,6 +24,7 @@ import { capabilityProfileRouter } from "./routes/capability-profile.js";
 import { learningFactoryRouter } from "./routes/learning-factory.js";
 import { simulationCoachingRouter } from "./routes/simulation-coaching.js";
 import { getAIProviderStatus } from "./ai/provider.js";
+import { getVoiceProviderStatus } from "./ai/voice-provider.js";
 
 export const app = express();
 const env = getEnv();
@@ -62,6 +63,7 @@ app.get("/health", (_request, response) => {
     status: "ok",
     service: API_SERVICE_NAME,
     ai: getAIProviderStatus(),
+    voice: getVoiceProviderStatus(),
   });
 });
 

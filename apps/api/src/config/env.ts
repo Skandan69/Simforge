@@ -26,9 +26,14 @@ const envSchema = z.object({
   AI_KNOWLEDGE_SECTION_LIMIT: z.coerce.number().int().min(1).max(30).default(8),
   OPENAI_TRANSCRIPTION_MODEL: z.string().min(1).default("gpt-4o-mini-transcribe"),
   OPENAI_SPEECH_MODEL: z.string().min(1).default("gpt-4o-mini-tts"),
-  OPENAI_SPEECH_VOICE: z.string().min(1).default("alloy"),
+  SOPHIA_TTS_VOICE: z.preprocess((value) => value === "" ? undefined : value, z.string().min(1).optional()),
+  OPENAI_TTS_VOICE: z.preprocess((value) => value === "" ? undefined : value, z.string().min(1).optional()),
+  OPENAI_SPEECH_VOICE: z.preprocess((value) => value === "" ? undefined : value, z.string().min(1).optional()),
+  SOPHIA_TTS_INSTRUCTIONS: z.preprocess((value) => value === "" ? undefined : value, z.string().min(1).max(500).optional()),
   VOICE_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(120_000).default(30_000),
   VOICE_MAX_AUDIO_BYTES: z.coerce.number().int().min(100_000).max(25_000_000).default(10_000_000),
+  VOICE_MIN_AUDIO_BYTES: z.coerce.number().int().min(1).max(100_000).default(1_000),
+  VOICE_MIN_DURATION_MS: z.coerce.number().int().min(250).max(5_000).default(1_000),
 });
 
 let parsedEnv: z.infer<typeof envSchema> | undefined;

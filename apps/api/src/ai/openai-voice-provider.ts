@@ -3,7 +3,7 @@ import type { SpeechToTextProvider, TextToSpeechProvider } from "./voice-types.j
 export class OpenAIVoiceProvider implements SpeechToTextProvider, TextToSpeechProvider {
   readonly name = "openai";
 
-  constructor(private readonly config: { apiKey: string; baseUrl: string; timeoutMs: number; transcriptionModel: string; speechModel: string; voice: string }) {}
+  constructor(private readonly config: { apiKey: string; baseUrl: string; timeoutMs: number; transcriptionModel: string; speechModel: string; voice: string; speechInstructions: string }) {}
 
   private async request(path: string, init: RequestInit) {
     const controller = new AbortController();
@@ -35,7 +35,7 @@ export class OpenAIVoiceProvider implements SpeechToTextProvider, TextToSpeechPr
     const response = await this.request("/audio/speech", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: this.config.speechModel, voice: this.config.voice, input: input.text, response_format: "mp3" }),
+      body: JSON.stringify({ model: this.config.speechModel, voice: this.config.voice, instructions: this.config.speechInstructions, input: input.text, response_format: "mp3" }),
     });
     return { audio: new Uint8Array(await response.arrayBuffer()), contentType: response.headers.get("content-type") ?? "audio/mpeg" };
   }

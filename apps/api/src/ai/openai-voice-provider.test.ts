@@ -5,16 +5,21 @@ import type { AddressInfo } from "node:net";
 import { OpenAIVoiceProvider } from "./openai-voice-provider.js";
 
 const requests: Array<{ url: string; authorization?: string; contentType?: string }> = [];
+const requestBodies: Buffer[] = [];
 const server = createServer((request, response) => {
   requests.push({ url: request.url ?? "", authorization: request.headers.authorization, contentType: request.headers["content-type"] });
-  request.resume();
-  if (request.url === "/audio/transcriptions") {
-    response.setHeader("Content-Type", "application/json");
-    response.end(JSON.stringify({ text: "I need help with this refund." }));
-    return;
-  }
-  response.setHeader("Content-Type", "audio/mpeg");
-  response.end(Buffer.from([1, 2, 3, 4]));
+  const chunks: Buffer[] = [];
+  request.on("data", (chunk: Buffer) => chunks.push(chunk));
+  request.on("end", () => {
+    requestBodies.push(Buffer.concat(chunks));
+    if (request.url === "/audio/transcriptions") {
+      response.setHeader("Content-Type", "application/json");
+      response.end(JSON.stringify({ text: "I need help with this refund." }));
+      return;
+    }
+    response.setHeader("Content-Type", "audio/mpeg");
+    response.end(Buffer.from([1, 2, 3, 4]));
+  });
 });
 server.listen(0);
 await new Promise<void>((resolve) => server.once("listening", resolve));
@@ -26,7 +31,8 @@ const provider = new OpenAIVoiceProvider({
   timeoutMs: 5_000,
   transcriptionModel: "transcribe-test",
   speechModel: "speech-test",
-  voice: "alloy",
+  voice: "coral",
+  speechInstructions: "Speak with a warm professional feminine voice.",
 });
 
 test("OpenAI-compatible voice provider transcribes audio server-side", async () => {
@@ -41,4 +47,7 @@ test("OpenAI-compatible voice provider returns synthesized audio", async () => {
   assert.deepEqual([...result.audio], [1, 2, 3, 4]);
   assert.equal(result.contentType, "audio/mpeg");
   assert.equal(requests[1]?.url, "/audio/speech");
+  const request = JSON.parse(requestBodies[1]?.toString("utf8") ?? "{}") as { voice?: string; instructions?: string };
+  assert.equal(request.voice, "coral");
+  assert.match(request.instructions ?? "", /feminine/u);
 });

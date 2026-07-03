@@ -49,6 +49,8 @@ export function SophiaSimulationRun({
   const recordingStreamRef = useRef<MediaStream | undefined>(undefined);
   const recordingChunksRef = useRef<Blob[]>([]);
   const holdingToTalkRef = useRef(false);
+  const recordingStartedAtRef = useRef<number | undefined>(undefined);
+  const recordingTimerRef = useRef<number | undefined>(undefined);
   const audioRef = useRef<HTMLAudioElement | undefined>(undefined);
   const audioUrlRef = useRef<string | undefined>(undefined);
   const [configuration, setConfiguration] =
@@ -61,6 +63,7 @@ export function SophiaSimulationRun({
   const [sending, setSending] = useState(false);
   const [evaluating, setEvaluating] = useState(false);
   const [voiceState, setVoiceState] = useState<VoiceState>("Ready");
+  const [recordingDurationMs, setRecordingDurationMs] = useState(0);
   const [voiceError, setVoiceError] = useState<string>();
   const [muted, setMuted] = useState(false);
   const [lastSophiaMessageId, setLastSophiaMessageId] = useState<string>();
@@ -94,6 +97,7 @@ export function SophiaSimulationRun({
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [conversation.length]);
   useEffect(() => () => {
+    if (recordingTimerRef.current) window.clearInterval(recordingTimerRef.current);
     recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
     audioRef.current?.pause();
     if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
@@ -154,7 +158,7 @@ export function SophiaSimulationRun({
     }
   }, [muted, session]);
 
-  const transcribeRecording = useCallback(async (audio: Blob) => {
+  const transcribeRecording = useCallback(async (audio: Blob, durationMs: number) => {
     if (!session) return;
     setVoiceError(undefined);
     try {
@@ -163,7 +167,7 @@ export function SophiaSimulationRun({
       setVoiceState("Transcribing");
       const result = await apiFetch<{ transcript: string }>(`/api/simulation-sessions/${session.id}/voice/transcribe`, {
         method: "POST",
-        headers: { "Content-Type": audio.type || "audio/webm" },
+        headers: { "Content-Type": audio.type || "audio/webm", "X-Audio-Duration-Ms": String(durationMs) },
         body: audio,
       });
       setContent(result.transcript);
@@ -192,15 +196,20 @@ export function SophiaSimulationRun({
       recorderRef.current = recorder;
       recorder.ondataavailable = (event) => { if (event.data.size) recordingChunksRef.current.push(event.data); };
       recorder.onstop = () => {
+        if (recordingTimerRef.current) window.clearInterval(recordingTimerRef.current);
         stream.getTracks().forEach((track) => track.stop());
+        const durationMs = recordingStartedAtRef.current ? Date.now() - recordingStartedAtRef.current : 0;
         const audio = new Blob(recordingChunksRef.current, { type: recorder.mimeType || "audio/webm" });
-        if (audio.size) void transcribeRecording(audio);
+        if (audio.size && durationMs >= 1_000) void transcribeRecording(audio, durationMs);
         else {
           setVoiceState("Error");
-          setVoiceError("No audio was captured. Hold the microphone button and try again.");
+          setVoiceError("Recording was too short. Please hold the microphone and speak for at least 1–2 seconds.");
         }
       };
       recorder.start();
+      recordingStartedAtRef.current = Date.now();
+      setRecordingDurationMs(0);
+      recordingTimerRef.current = window.setInterval(() => setRecordingDurationMs(Date.now() - (recordingStartedAtRef.current ?? Date.now())), 100);
       setVoiceState("Listening");
     } catch (caught) {
       holdingToTalkRef.current = false;
@@ -482,7 +491,7 @@ export function SophiaSimulationRun({
                   onKeyUp={(event) => { if (event.key === " " || event.key === "Enter") { event.preventDefault(); endPushToTalk(); } }}
                 >
                   {voiceState === "Listening" ? <Loader2 className="animate-pulse" /> : <Mic />}
-                  <span className="text-[10px]">Hold to talk</span>
+                  <span className="text-[10px]">{voiceState === "Listening" ? `${(recordingDurationMs / 1_000).toFixed(1)}s` : "Hold to talk"}</span>
                 </Button>
                 <Textarea
                   value={content}
