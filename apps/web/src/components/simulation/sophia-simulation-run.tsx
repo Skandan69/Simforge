@@ -10,7 +10,6 @@ import {
   Send,
   ShieldCheck,
   Sparkles,
-  UserRound,
   Volume2,
   VolumeX,
 } from "lucide-react";
@@ -340,7 +339,7 @@ export function SophiaSimulationRun({
           )}
         </div>
       </section>
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_300px] lg:gap-5">
         <SophiaAvatarStage
           state={avatarState}
           controls={<div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-center">
@@ -370,7 +369,7 @@ export function SophiaSimulationRun({
             </Button>
           </div>}
         />
-        <aside className="space-y-4">
+        <aside className="order-3 space-y-4 lg:col-start-2 lg:row-span-2 lg:row-start-1" aria-label="Simulation guidance">
           <Card className="border-slate-700/50 bg-slate-950 text-slate-100">
             <CardHeader><CardTitle className="text-base">Live evaluation</CardTitle></CardHeader>
             <CardContent><p className="text-sm leading-6 text-slate-400">Your completed conversation will be evaluated after you end the simulation. Live scoring is not shown during practice.</p><div className="mt-4 space-y-2" aria-hidden="true">{[72, 58, 66].map((width) => <div key={width} className="h-2 rounded-full bg-slate-800"><div className="h-full rounded-full bg-slate-700" style={{ width: `${width}%` }} /></div>)}</div></CardContent>
@@ -384,43 +383,7 @@ export function SophiaSimulationRun({
             <CardContent className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{configuration.scenarioSetup}</CardContent>
           </Card>
         </aside>
-      </div>
-      <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
-        <aside className="space-y-4">
-          <Card>
-            <CardHeader>
-              <div className="grid size-11 place-items-center rounded-xl bg-primary/10 text-primary">
-                <Sparkles className="size-5" />
-              </div>
-              <CardTitle className="mt-3">Sophia</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <p className="text-muted-foreground">AI simulation trainer</p>
-              <div className="flex items-start gap-2 rounded-lg bg-muted/50 p-3 text-xs leading-5">
-                <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" />
-                <span>
-                  Sophia uses the configured simulation persona and organization
-                  context. Your messages are saved for evaluation and coaching.
-                </span>
-              </div>
-              {configuration.persona && (
-                <div className="border-t pt-3">
-                  <p className="flex items-center gap-2 font-medium">
-                    <UserRound className="size-4" />
-                    Scenario persona
-                  </p>
-                  <p className="mt-1 text-muted-foreground">
-                    {configuration.persona.name} · {configuration.persona.role}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Tone: {configuration.persona.tone}
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </aside>
-        <Card className="flex min-h-[620px] flex-col overflow-hidden">
+        <Card className="order-2 flex min-h-[520px] flex-col overflow-hidden lg:col-start-1 lg:row-start-2" aria-label="Simulation conversation">
           <CardHeader className="border-b">
             <div className="flex items-center justify-between gap-3">
               <div>

@@ -16,7 +16,7 @@ export function SophiaAvatarStage({ state, controls }: { state: SophiaAvatarStat
   const [failed, setFailed] = useState(false);
   const presentation = SOPHIA_AVATAR_PRESENTATION[state];
   return <section className="overflow-hidden rounded-2xl border border-slate-700/70 bg-slate-950 shadow-2xl shadow-slate-950/20" aria-label="Sophia avatar">
-    <div className="relative min-h-[430px] overflow-hidden sm:min-h-[500px]">
+    <div className="relative min-h-[340px] overflow-hidden sm:min-h-[400px] lg:min-h-[420px]">
       {failed ? <SophiaAvatarFallback /> : <Image src="/assets/sophia/sophia-avatar-v1.png" alt="Sophia, professional AI simulation trainer" fill sizes="(max-width: 1024px) 100vw, 70vw" className={cn("object-cover object-top transition-transform duration-700", state === "speaking" && "scale-[1.015] animate-[pulse_2.2s_ease-in-out_infinite]", state === "listening" && "scale-[1.01]", state === "thinking" && "brightness-90")} onError={() => setFailed(true)} />}
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-slate-950/10" />
       {state === "speaking" && <div className="pointer-events-none absolute inset-5 rounded-2xl border border-cyan-300/35 animate-pulse" />}
