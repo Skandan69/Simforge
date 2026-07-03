@@ -16,7 +16,7 @@ import {
   createPlaceholderOpeningMessage,
   sessionScope,
 } from "../services/simulation-runtime.js";
-import { updateLearnerCapabilityProfile } from "../services/capability-profile.js";
+import { prepareCapabilityProfileUpdate, updateLearnerCapabilityProfile } from "../services/capability-profile.js";
 import { getEnv } from "../config/env.js";
 import { getAIProvider } from "../ai/provider.js";
 import { buildSophiaSystemPrompt } from "../ai/prompt-builder.js";
@@ -277,8 +277,23 @@ simulationSessionsRouter.post("/:id/evaluate", async (request, response) => {
     transcript,
     fallback: () => buildDeterministicEvaluation(learnerMessages),
   });
+  const assessedAt = new Date();
+  const [existingHistory, capabilityProfile] = await Promise.all([
+    prisma.capabilityAssessmentHistory.findFirst({
+      where: { sessionId: session.id },
+      select: { id: true },
+    }),
+    prisma.learnerCapabilityProfile.findUnique({
+      where: { organizationId_learnerId: { organizationId, learnerId: session.learnerId } },
+      include: { capabilities: true },
+    }),
+  ]);
+  const capabilityUpdate = prepareCapabilityProfileUpdate(
+    capabilityProfile,
+    Boolean(existingHistory),
+    result.capabilityScores,
+  );
   await prisma.$transaction(async (transaction) => {
-    const assessedAt = new Date();
     await transaction.simulationEvaluation.upsert({
       where: { sessionId: session.id },
       create: {
@@ -312,7 +327,7 @@ simulationSessionsRouter.post("/:id/evaluate", async (request, response) => {
       sessionId: session.id,
       assessedAt,
       scores: result.capabilityScores,
-    });
+    }, capabilityUpdate);
     await transaction.simulationSession.update({
       where: { id: session.id },
       data: {
@@ -321,6 +336,6 @@ simulationSessionsRouter.post("/:id/evaluate", async (request, response) => {
         overallScore: result.overallScore,
       },
     });
-  });
+  }, { timeout: 15_000 });
   response.json(await getSession(session.id, organizationId));
 });

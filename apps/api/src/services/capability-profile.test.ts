@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Prisma } from "../generated/prisma/client.js";
-import { calculateCapabilityUpdate, capabilityConfidence, capabilityProfileScope, capabilityTrend, sessionHistoryScope, updateLearnerCapabilityProfile } from "./capability-profile.js";
+import { calculateCapabilityUpdate, capabilityConfidence, capabilityProfileScope, capabilityTrend, prepareCapabilityProfileUpdate, sessionHistoryScope, updateLearnerCapabilityProfile } from "./capability-profile.js";
 
 test("first capability assessment creates a baseline without artificial change", () => {
   assert.deepEqual(calculateCapabilityUpdate(null, 0, 72), { currentScore: 72, previousScore: null, change: 0, assessmentCount: 1 });
@@ -34,7 +34,7 @@ test("re-evaluating one session does not duplicate history or profile counts", a
   const transaction = {
     capabilityAssessmentHistory: {
       findFirst: async ({ where }: { where: { sessionId: string } }) => history.find((item) => item.sessionId === where.sessionId) ? { id: "history" } : null,
-      create: async ({ data }: { data: { sessionId: string; capabilityName: string } }) => { history.push(data); return data; },
+      createMany: async ({ data }: { data: Array<{ sessionId: string; capabilityName: string }> }) => { history.push(...data); return { count: data.length }; },
     },
     learnerCapabilityProfile: {
       upsert: async () => profile,
@@ -48,11 +48,23 @@ test("re-evaluating one session does not duplicate history or profile counts", a
     },
   } as unknown as Prisma.TransactionClient;
   const input = { organizationId: "org-a", learnerId: "learner-a", sessionId: "session-a", assessedAt: new Date(), scores: [{ capabilityName: "Communication" as const, score: 70 }, { capabilityName: "Empathy" as const, score: 80 }] };
+  const prepared = prepareCapabilityProfileUpdate(profile, false, input.scores);
 
-  assert.equal(await updateLearnerCapabilityProfile(transaction, input), true);
+  assert.equal(await updateLearnerCapabilityProfile(transaction, input, prepared), true);
   assert.equal(history.length, 2);
   assert.equal(profile.simulationCount, 1);
-  assert.equal(await updateLearnerCapabilityProfile(transaction, input), false);
+  assert.equal(await updateLearnerCapabilityProfile(transaction, input, prepared), false);
   assert.equal(history.length, 2);
   assert.equal(profile.simulationCount, 1);
+});
+
+test("capability calculations are prepared before persistence and retain fallback scores", () => {
+  const prepared = prepareCapabilityProfileUpdate(null, false, [
+    { capabilityName: "Communication", score: 54 },
+    { capabilityName: "Policy Compliance", score: 49 },
+  ]);
+  assert.equal(prepared.profileId, null);
+  assert.equal(prepared.simulationCount, 1);
+  assert.equal(prepared.overallScore, 51.5);
+  assert.deepEqual(prepared.updates.map((item) => item.currentScore), [54, 49]);
 });
