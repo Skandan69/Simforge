@@ -31,7 +31,7 @@ after(
 test("health endpoint reports the API service", async () => {
   const response = await fetch(`${baseUrl}/health`);
   assert.equal(response.status, 200);
-  const body = await response.json() as { status: string; service: string; ai: { provider: string; configured: boolean; reason: string }; voice: { sttConfigured: boolean; ttsConfigured: boolean; ttsVoice: string } };
+  const body = await response.json() as { status: string; service: string; ai: { provider: string; configured: boolean; reason: string }; voice: { sttConfigured: boolean; ttsConfigured: boolean; ttsVoice: string }; embeddings: { provider: string; configured: boolean; model: string; dimensions: number; indexDimensions: number; dimensionMatches: boolean } };
   assert.equal(body.status, "ok");
   assert.equal(body.service, "simforge-api");
   assert.equal(body.ai.configured, body.ai.provider === "openai");
@@ -39,6 +39,9 @@ test("health endpoint reports the API service", async () => {
   assert.equal(body.voice.sttConfigured, body.ai.configured);
   assert.equal(body.voice.ttsConfigured, body.ai.configured);
   assert.ok(body.voice.ttsVoice.length > 0);
+  assert.equal(body.embeddings.dimensions, 1536);
+  assert.equal(body.embeddings.indexDimensions, 1536);
+  assert.equal(body.embeddings.dimensionMatches, true);
   assert.equal(JSON.stringify(body).includes("OPENAI_API_KEY"), false);
 });
 
@@ -72,6 +75,7 @@ test("Knowledge Studio endpoints require authentication", async () => {
     "/api/processing/documents/00000000-0000-0000-0000-000000000000/status",
     "/api/documents/00000000-0000-0000-0000-000000000000/intelligence",
     "/api/organization-blueprint",
+    "/api/sophia/ask",
   ]) {
     const response = await fetch(`${baseUrl}${path}`);
     assert.equal(response.status, 401, path);

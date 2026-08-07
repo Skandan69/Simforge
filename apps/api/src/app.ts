@@ -23,8 +23,10 @@ import { simulationSessionsRouter } from "./routes/simulation-sessions.js";
 import { capabilityProfileRouter } from "./routes/capability-profile.js";
 import { learningFactoryRouter } from "./routes/learning-factory.js";
 import { simulationCoachingRouter } from "./routes/simulation-coaching.js";
+import { sophiaAskRouter } from "./routes/sophia-ask.js";
 import { getAIProviderStatus } from "./ai/provider.js";
 import { getVoiceProviderStatus } from "./ai/voice-provider.js";
+import { getEmbeddingProviderStatus } from "./ai/embedding-provider.js";
 
 export const app = express();
 const env = getEnv();
@@ -64,6 +66,7 @@ app.get("/health", (_request, response) => {
     service: API_SERVICE_NAME,
     ai: getAIProviderStatus(),
     voice: getVoiceProviderStatus(),
+    embeddings: getEmbeddingProviderStatus(),
   });
 });
 
@@ -82,6 +85,7 @@ app.use("/api/simulation-sessions", simulationSessionsRouter);
 app.use("/api/simulation-sessions", simulationCoachingRouter);
 app.use("/api/capability-profile", capabilityProfileRouter);
 app.use("/api/learning-factory", learningFactoryRouter);
+app.use("/api/sophia", sophiaAskRouter);
 
 app.use((_request, response) => {
   response.status(404).json({ error: "Route not found" });

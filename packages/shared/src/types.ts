@@ -88,6 +88,9 @@ export type DocumentFileType = "PDF" | "DOCX" | "PPTX" | "XLSX";
 export type DocumentStatus = "Ready" | "Archived" | "Failed";
 export type ProcessingStatus =
   "Uploaded" | "Queued" | "Processing" | "Completed" | "Failed" | "Cancelled";
+export type SophiaMode = (typeof import("./constants.js").SOPHIA_MODES)[number];
+export type DocumentVersionRetrievalStatus = "PROCESSING" | "ACTIVE" | "SUPERSEDED" | "FAILED" | "ARCHIVED";
+export type KnowledgeChunkStatus = "PROCESSING" | "ACTIVE" | "SUPERSEDED" | "FAILED" | "ARCHIVED";
 
 export type KnowledgeSectionType =
   | "Policy"
@@ -251,6 +254,37 @@ export interface KnowledgeSearchResponse {
   query: string;
   documents: DocumentSummary[];
   knowledgeBases: KnowledgeBaseSummary[];
+}
+
+export type RetrievalConfidence = "LOW" | "MEDIUM" | "HIGH";
+
+export interface AskSophiaSource {
+  evidenceId: `E${number}`;
+  document: string;
+  knowledgeBase: string;
+  version: number;
+  section: string | null;
+  headingPath: string[];
+  page: number | null;
+  slide: number | null;
+  sheet: string | null;
+  rowStart: number | null;
+  rowEnd: number | null;
+  excerpt: string;
+  citationLabel: string;
+}
+
+export interface AskSophiaRequest {
+  question: string;
+  knowledgeBaseIds?: string[];
+}
+
+export interface AskSophiaResponse {
+  mode: "ASK";
+  answer: string;
+  sources: AskSophiaSource[];
+  insufficientEvidence: boolean;
+  confidence?: RetrievalConfidence;
 }
 
 export type SimulationDifficulty =
