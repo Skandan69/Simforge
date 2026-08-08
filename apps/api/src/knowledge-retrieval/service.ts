@@ -528,7 +528,6 @@ export class KnowledgeRetrievalService {
       kbIds,
       docIds,
       effectiveCandidateLimit,
-      exactIdentifiers,
     );
     });
 
