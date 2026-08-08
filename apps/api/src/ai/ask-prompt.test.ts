@@ -25,6 +25,19 @@ const evidence: KnowledgeEvidence = {
   rerankScore: 0.1,
   finalScore: 0.2,
   citationLabel: "Refund Policy v2, page 14",
+  relevance: {
+    meaningfulQueryTerms: 3,
+    termOverlap: 3,
+    termOverlapRatio: 1,
+    identifierOverlap: 0,
+    numberOverlap: 1,
+    numberOverlapRatio: 1,
+    exactIdentifierRequired: false,
+    exactIdentifierSatisfied: true,
+    hasExactPhrase: false,
+    documentNumberMatch: false,
+    strong: true,
+  },
 };
 
 test("ASK prompt uses evidence IDs and does not ask the model to invent citations", () => {

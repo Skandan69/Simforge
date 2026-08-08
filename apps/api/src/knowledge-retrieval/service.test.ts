@@ -7,7 +7,7 @@ process.env.SUPABASE_URL ??= "https://example.supabase.co";
 process.env.SUPABASE_PUBLISHABLE_KEY ??= "sb_publishable_test";
 process.env.SUPABASE_SERVICE_ROLE_KEY ??= "service_role_test";
 
-const { calculateConfidence, reciprocalRankFusion, selectEvidence, toAskSource } = await import("./service.js");
+const { assessEvidenceRelevance, calculateConfidence, reciprocalRankFusion, selectEvidence, toAskSource } = await import("./service.js");
 
 const base = {
   documentId: "document-a",
@@ -58,4 +58,59 @@ test("weak or empty retrieval remains insufficient evidence", () => {
   assert.equal(calculateConfidence([]), "LOW");
   const weak = selectEvidence(reciprocalRankFusion([candidate("c1", "unrelated text")], []), "different question", 5, 1000);
   assert.equal(calculateConfidence(weak), "LOW");
+});
+
+test("clearly unanswerable questions do not keep weak vector-only distractors", () => {
+  const distractors = reciprocalRankFusion([], [
+    candidate("c1", "Refund policy allows manager review for damaged accessories."),
+    candidate("c2", "Shipping policy requires empathy and case documentation."),
+  ]);
+  const evidence = selectEvidence(distractors, "What is the lunar cafeteria authorization code?", 5, 1000);
+  assert.equal(evidence.length, 0);
+  assert.equal(calculateConfidence(evidence), "LOW");
+});
+
+test("synthetic or structured identifiers require exact identifier evidence", () => {
+  const distractors = reciprocalRankFusion([], [
+    candidate("c1", "QA TEST policy marker QA-phase-a-123-DIRECT-42 explains refund windows."),
+    candidate("c2", "QA TEST policy marker QA-phase-a-123-EXCEPTION-42 explains shipping delays."),
+  ]);
+  const evidence = selectEvidence(distractors, "What is QA-phase-a-123-MISSING-42?", 5, 1000);
+  assert.equal(evidence.length, 0);
+});
+
+test("same-topic but wrong policy remains insufficient when identifier evidence is absent", () => {
+  const distractors = reciprocalRankFusion([], [
+    candidate("c1", "Refund exception REFUND-ALPHA-100 requires manager approval."),
+    candidate("c2", "Refund exception REFUND-BETA-200 requires legal approval."),
+  ]);
+  const evidence = selectEvidence(distractors, "What approval is required for REFUND-GAMMA-300?", 5, 1000);
+  assert.equal(evidence.length, 0);
+});
+
+test("exact identifier evidence survives no-answer filtering", () => {
+  const fused = reciprocalRankFusion([
+    candidate("c1", "Refund exception REFUND-GAMMA-300 requires director approval within 2 days."),
+  ], []);
+  const evidence = selectEvidence(fused, "What approval is required for REFUND-GAMMA-300?", 5, 1000);
+  assert.equal(evidence[0]?.chunkId, "c1");
+  assert.notEqual(calculateConfidence(evidence), "LOW");
+});
+
+test("structured identifier prefixes can retrieve active version lifecycle evidence", () => {
+  const fused = reciprocalRankFusion([
+    candidate("c1", "Version lifecycle active value PHASE-A-123-VERSION-V2: refund period is 14 days."),
+  ], []);
+  const evidence = selectEvidence(fused, "What is the current refund period for PHASE-A-123 version lifecycle?", 5, 1000);
+  assert.equal(evidence[0]?.chunkId, "c1");
+  assert.notEqual(calculateConfidence(evidence), "LOW");
+});
+
+test("numeric evidence uses exact number tokens instead of substring matches", () => {
+  const wrong = candidate("wrong", "Refund review window is 128 business days for archived cases.");
+  const right = candidate("right", "Refund review window is 28 business days for shipping delay evidence.");
+  const relevanceWrong = assessEvidenceRelevance(wrong, "How many business days is the 28 day refund review window?");
+  const relevanceRight = assessEvidenceRelevance(right, "How many business days is the 28 day refund review window?");
+  assert.equal(relevanceWrong.numberOverlap, 0);
+  assert.equal(relevanceRight.numberOverlap, 1);
 });

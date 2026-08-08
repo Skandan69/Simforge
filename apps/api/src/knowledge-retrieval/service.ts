@@ -36,6 +36,7 @@ export interface KnowledgeEvidence extends RetrievalCandidate {
   rerankScore: number;
   finalScore: number;
   citationLabel: string;
+  relevance: EvidenceRelevance;
 }
 
 export interface KnowledgeRetrievalResult {
@@ -60,14 +61,95 @@ export interface KnowledgeRetrievalInput {
 
 const WORD_PATTERN = /[\p{L}\p{N}][\p{L}\p{N}-]{1,}/gu;
 const NUMBER_PATTERN = /\b\d+(?:\.\d+)?\b/gu;
+const TOKEN_PATTERN = /[\p{L}\p{N}]+/gu;
+const IDENTIFIER_PATTERN = /\b(?=[\p{L}\p{N}-]{6,}\b)(?=[\p{L}\p{N}-]*(?:\d|-))[\p{L}\p{N}][\p{L}\p{N}-]*[\p{L}\p{N}]\b/giu;
 const RRF_K = 60;
+const STOP_WORDS = new Set([
+  "about",
+  "after",
+  "and",
+  "are",
+  "before",
+  "current",
+  "does",
+  "for",
+  "from",
+  "how",
+  "in",
+  "into",
+  "is",
+  "it",
+  "of",
+  "or",
+  "policy",
+  "question",
+  "requires",
+  "the",
+  "this",
+  "to",
+  "what",
+  "when",
+  "where",
+  "who",
+  "why",
+]);
+
+export interface EvidenceRelevance {
+  meaningfulQueryTerms: number;
+  termOverlap: number;
+  termOverlapRatio: number;
+  identifierOverlap: number;
+  numberOverlap: number;
+  numberOverlapRatio: number;
+  exactIdentifierRequired: boolean;
+  exactIdentifierSatisfied: boolean;
+  hasExactPhrase: boolean;
+  documentNumberMatch: boolean;
+  strong: boolean;
+}
 
 function terms(value: string) {
   return new Set(value.toLowerCase().match(WORD_PATTERN) ?? []);
 }
 
 function numbers(value: string) {
-  return new Set(value.match(NUMBER_PATTERN) ?? []);
+  return new Set((value.match(NUMBER_PATTERN) ?? []).filter((number) => number.length <= 6));
+}
+
+function tokens(value: string) {
+  return new Set((value.toLowerCase().match(TOKEN_PATTERN) ?? []).filter((term) => term.length >= 3 && !STOP_WORDS.has(term)));
+}
+
+function identifiers(value: string) {
+  return new Set((value.toLowerCase().match(IDENTIFIER_PATTERN) ?? []).filter((term) => !STOP_WORDS.has(term)));
+}
+
+function candidateSearchText(candidate: Pick<RetrievalCandidate, "documentName" | "sectionTitle" | "headingPath" | "text">) {
+  return `${candidate.documentName} ${candidate.sectionTitle ?? ""} ${candidate.headingPath.join(" ")} ${candidate.text}`;
+}
+
+function documentNumber(value: string) {
+  return value.toLowerCase().match(/\bdocument\s+(\d{1,6})\b/u)?.[1] ?? null;
+}
+
+function documentNumberMatches(candidate: Pick<RetrievalCandidate, "documentName" | "text">, query: string) {
+  const queryNumber = documentNumber(query);
+  if (!queryNumber) return false;
+  const normalized = queryNumber.padStart(2, "0");
+  return new RegExp(`(?:^|[^\\d])0*${queryNumber}(?:[^\\d]|$)`, "u").test(candidate.documentName)
+    || candidate.documentName.includes(normalized)
+    || candidate.text.toLowerCase().includes(`document ${normalized}`)
+    || candidate.text.toLowerCase().includes(`document ${queryNumber}`);
+}
+
+function identifierCompatible(queryIdentifier: string, candidateIdentifier: string) {
+  return queryIdentifier === candidateIdentifier
+    || (queryIdentifier.length >= 10 && candidateIdentifier.startsWith(`${queryIdentifier}-`))
+    || (candidateIdentifier.length >= 10 && queryIdentifier.startsWith(`${candidateIdentifier}-`));
+}
+
+function identifierOverlapCount(queryIdentifiers: Set<string>, candidateIdentifiers: Set<string>) {
+  return [...queryIdentifiers].filter((queryIdentifier) => [...candidateIdentifiers].some((candidateIdentifier) => identifierCompatible(queryIdentifier, candidateIdentifier))).length;
 }
 
 function clamp(value: number, min = 0, max = 1) {
@@ -117,17 +199,59 @@ export function reciprocalRankFusion(lexical: RetrievalCandidate[], vector: Retr
 }
 
 export function deterministicRerank(candidate: RetrievalCandidate & { rrfScore: number }, query: string) {
-  const queryTerms = terms(query);
+  const queryTerms = tokens(query);
   const queryNumbers = numbers(query);
-  const text = `${candidate.documentName} ${candidate.sectionTitle ?? ""} ${candidate.headingPath.join(" ")} ${candidate.text}`.toLowerCase();
-  const candidateTerms = terms(text);
+  const text = candidateSearchText(candidate).toLowerCase();
+  const candidateTerms = tokens(text);
+  const candidateNumbers = numbers(text);
+  const queryIdentifiers = identifiers(query);
+  const candidateIdentifiers = identifiers(text);
   const overlap = [...queryTerms].filter((term) => candidateTerms.has(term)).length;
-  const exactPhrase = query.length >= 8 && candidate.text.toLowerCase().includes(query.toLowerCase()) ? 0.06 : 0;
-  const numberMatch = queryNumbers.size ? [...queryNumbers].filter((number) => candidate.text.includes(number)).length / queryNumbers.size * 0.08 : 0;
+  const identifierMatch = queryIdentifiers.size ? identifierOverlapCount(queryIdentifiers, candidateIdentifiers) / queryIdentifiers.size * 0.12 : 0;
+  const exactPhrase = query.length >= 8 && candidate.text.toLowerCase().includes(query.toLowerCase()) ? 0.08 : 0;
+  const numberMatch = queryNumbers.size ? [...queryNumbers].filter((number) => candidateNumbers.has(number)).length / queryNumbers.size * 0.08 : 0;
+  const docNumberMatch = documentNumberMatches(candidate, query) ? 0.16 : 0;
   const titleMatch = [...queryTerms].some((term) => candidate.documentName.toLowerCase().includes(term)) ? 0.03 : 0;
   const headingMatch = [...queryTerms].some((term) => candidate.headingPath.join(" ").toLowerCase().includes(term)) ? 0.04 : 0;
   const locationBoost = candidate.pageNumber || candidate.slideNumber || candidate.sheetName ? 0.02 : 0;
-  return clamp(overlap / Math.max(queryTerms.size, 1) * 0.12 + exactPhrase + numberMatch + titleMatch + headingMatch + locationBoost, 0, 0.3);
+  return clamp(overlap / Math.max(queryTerms.size, 1) * 0.12 + identifierMatch + exactPhrase + numberMatch + docNumberMatch + titleMatch + headingMatch + locationBoost, 0, 0.42);
+}
+
+export function assessEvidenceRelevance(candidate: RetrievalCandidate, query: string): EvidenceRelevance {
+  const queryTerms = tokens(query);
+  const candidateTerms = tokens(candidateSearchText(candidate));
+  const queryIdentifiers = identifiers(query);
+  const candidateIdentifiers = identifiers(candidateSearchText(candidate));
+  const queryNumbers = numbers(query);
+  const candidateNumbers = numbers(candidateSearchText(candidate));
+  const termOverlap = [...queryTerms].filter((term) => candidateTerms.has(term)).length;
+  const identifierOverlap = identifierOverlapCount(queryIdentifiers, candidateIdentifiers);
+  const numberOverlap = [...queryNumbers].filter((number) => candidateNumbers.has(number)).length;
+  const termOverlapRatio = queryTerms.size ? termOverlap / queryTerms.size : 0;
+  const numberOverlapRatio = queryNumbers.size ? numberOverlap / queryNumbers.size : 0;
+  const exactIdentifierRequired = queryIdentifiers.size > 0;
+  const exactIdentifierSatisfied = !exactIdentifierRequired || identifierOverlap > 0;
+  const normalizedQuery = query.toLowerCase().replace(/\s+/gu, " ").trim();
+  const normalizedText = candidate.text.toLowerCase().replace(/\s+/gu, " ").trim();
+  const hasExactPhrase = normalizedQuery.length >= 12 && normalizedText.includes(normalizedQuery);
+  const documentNumberMatch = documentNumberMatches(candidate, query);
+  const hasStrongTokenEvidence = termOverlapRatio >= 0.4 || termOverlap >= 3;
+  const hasStrongNumberEvidence = queryNumbers.size > 0 && numberOverlapRatio >= 0.5 && termOverlap >= 1;
+  const hasStrongIdentifierEvidence = exactIdentifierRequired && identifierOverlap > 0;
+  const strong = exactIdentifierSatisfied && (hasStrongIdentifierEvidence || hasStrongTokenEvidence || hasStrongNumberEvidence || hasExactPhrase || documentNumberMatch);
+  return {
+    meaningfulQueryTerms: queryTerms.size,
+    termOverlap,
+    termOverlapRatio,
+    identifierOverlap,
+    numberOverlap,
+    numberOverlapRatio,
+    exactIdentifierRequired,
+    exactIdentifierSatisfied,
+    hasExactPhrase,
+    documentNumberMatch,
+    strong,
+  };
 }
 
 export function calculateConfidence(evidence: KnowledgeEvidence[]): RetrievalConfidence {
@@ -136,15 +260,16 @@ export function calculateConfidence(evidence: KnowledgeEvidence[]): RetrievalCon
   const second = evidence[1];
   const gap = second ? top.finalScore - second.finalScore : top.finalScore;
   const hasCitationLocation = Boolean(top.pageNumber || top.slideNumber || top.sheetName || top.sectionTitle);
-  if (top.finalScore >= 0.12 && gap >= 0.02 && hasCitationLocation) return "HIGH";
-  if (top.finalScore >= 0.075) return "MEDIUM";
+  if (!top.relevance.strong) return "LOW";
+  if (top.finalScore >= 0.16 && gap >= 0.02 && hasCitationLocation && (top.relevance.termOverlapRatio >= 0.5 || top.relevance.identifierOverlap > 0 || top.relevance.numberOverlapRatio >= 0.5)) return "HIGH";
+  if (top.finalScore >= 0.095 && (top.relevance.termOverlapRatio >= 0.35 || top.relevance.identifierOverlap > 0 || top.relevance.numberOverlapRatio >= 0.5)) return "MEDIUM";
   return "LOW";
 }
 
 export function selectEvidence(candidates: Array<RetrievalCandidate & { rrfScore: number }>, query: string, limit: number, maxEvidenceTokens: number): KnowledgeEvidence[] {
   const selected: KnowledgeEvidence[] = [];
   let tokens = 0;
-  for (const candidate of candidates.map((item) => ({ ...item, rerankScore: deterministicRerank(item, query) })).map((item) => ({ ...item, finalScore: item.rrfScore + item.rerankScore })).sort((a, b) => b.finalScore - a.finalScore)) {
+  for (const candidate of candidates.map((item) => ({ ...item, rerankScore: deterministicRerank(item, query), relevance: assessEvidenceRelevance(item, query) })).filter((item) => item.relevance.strong).map((item) => ({ ...item, finalScore: item.rrfScore + item.rerankScore })).sort((a, b) => b.finalScore - a.finalScore)) {
     if (selected.length >= limit) break;
     if (selected.some((existing) => existing.text === candidate.text)) continue;
     const candidateTokens = estimateTokens(candidate.text);
@@ -206,6 +331,7 @@ export class KnowledgeRetrievalService {
     const maxEvidenceTokens = input.maxEvidenceTokens ?? 2_500;
     const kbIds = input.knowledgeBaseIds?.length ? input.knowledgeBaseIds : null;
     const docIds = input.documentIds?.length ? input.documentIds : null;
+    const exactIdentifier = identifiers(input.query).values().next().value ?? null;
     const lexicalRows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
       `SELECT kc."id" AS "chunkId", d."id" AS "documentId", d."fileName" AS "documentName",
         kb."id" AS "knowledgeBaseId", kb."name" AS "knowledgeBaseName",
@@ -228,7 +354,9 @@ export class KnowledgeRetrievalService {
         AND ($4::uuid[] IS NULL OR d."id" = ANY($4::uuid[]))
         AND (to_tsvector('english', kc."text") @@ websearch_to_tsquery('english', $2)
           OR kc."text" ILIKE '%' || $2 || '%'
+          OR ($6::text IS NOT NULL AND kc."text" ILIKE '%' || $6::text || '%')
           OR d."fileName" ILIKE '%' || $2 || '%'
+          OR ($6::text IS NOT NULL AND d."fileName" ILIKE '%' || $6::text || '%')
           OR kc."sectionTitle" ILIKE '%' || $2 || '%')
       ORDER BY "lexicalScore" DESC, kc."createdAt" DESC
       LIMIT $5`,
@@ -237,6 +365,7 @@ export class KnowledgeRetrievalService {
       kbIds,
       docIds,
       candidateLimit,
+      exactIdentifier,
     );
     const lexical = mapRows(lexicalRows);
 

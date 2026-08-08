@@ -26,6 +26,19 @@ function evidence(id: string, citationLabel = "Refund Policy v2, page 14"): Know
     rerankScore: 0.1,
     finalScore: 0.2,
     citationLabel,
+    relevance: {
+      meaningfulQueryTerms: 3,
+      termOverlap: 3,
+      termOverlapRatio: 1,
+      identifierOverlap: 0,
+      numberOverlap: 1,
+      numberOverlapRatio: 1,
+      exactIdentifierRequired: false,
+      exactIdentifierSatisfied: true,
+      hasExactPhrase: false,
+      documentNumberMatch: false,
+      strong: true,
+    },
   };
 }
 
