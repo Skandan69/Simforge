@@ -521,7 +521,6 @@ export class KnowledgeRetrievalService {
         AND ($3::uuid[] IS NULL OR kb."id" = ANY($3::uuid[]))
         AND ($4::uuid[] IS NULL OR d."id" = ANY($4::uuid[]))
         AND to_tsvector('english', kc."text") @@ websearch_to_tsquery('english', $2)
-      ORDER BY kc."createdAt" DESC
       LIMIT $5`,
       input.scope.organizationId,
       input.query,
