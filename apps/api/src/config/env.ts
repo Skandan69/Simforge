@@ -6,6 +6,7 @@ const envSchema = z.object({
     .default("development"),
   PORT: z.coerce.number().int().positive().default(4000),
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
+  DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(50).default(20),
   SUPABASE_URL: z.url("SUPABASE_URL must be a valid URL"),
   SUPABASE_PUBLISHABLE_KEY: z
     .string()
@@ -24,6 +25,12 @@ const envSchema = z.object({
   AI_HISTORY_LIMIT: z.coerce.number().int().min(2).max(40).default(16),
   AI_SESSION_MESSAGE_LIMIT: z.coerce.number().int().min(4).max(200).default(80),
   AI_KNOWLEDGE_SECTION_LIMIT: z.coerce.number().int().min(1).max(30).default(8),
+  EMBEDDING_PROVIDER: z.enum(["disabled", "openai"]).default("openai"),
+  OPENAI_EMBEDDING_MODEL: z.string().min(1).default("text-embedding-3-small"),
+  OPENAI_EMBEDDING_DIMENSIONS: z.coerce.number().int().positive().default(1536),
+  EMBEDDING_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(32),
+  EMBEDDING_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(120_000).default(30_000),
+  EMBEDDING_MAX_RETRIES: z.coerce.number().int().min(0).max(5).default(2),
   OPENAI_TRANSCRIPTION_MODEL: z.string().min(1).default("gpt-4o-mini-transcribe"),
   OPENAI_SPEECH_MODEL: z.string().min(1).default("gpt-4o-mini-tts"),
   SOPHIA_TTS_VOICE: z.preprocess((value) => value === "" ? undefined : value, z.string().min(1).optional()),

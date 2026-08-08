@@ -57,6 +57,10 @@ export function coachingScope(sessionId: string, organizationId: string) {
   return { sessionId, organizationId } as const;
 }
 
+export function simulationSessionCoachingScope(id: string, organizationId: string) {
+  return { id, organizationId } as const;
+}
+
 export function coachingReadiness(status: string, hasEvaluation: boolean) {
   if (status !== "COMPLETED") return { ready: false, reason: "Simulation must be completed before coaching" } as const;
   if (!hasEvaluation) return { ready: false, reason: "Simulation evaluation is required before coaching" } as const;

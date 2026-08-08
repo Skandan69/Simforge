@@ -23,8 +23,11 @@ import { simulationSessionsRouter } from "./routes/simulation-sessions.js";
 import { capabilityProfileRouter } from "./routes/capability-profile.js";
 import { learningFactoryRouter } from "./routes/learning-factory.js";
 import { simulationCoachingRouter } from "./routes/simulation-coaching.js";
+import { sophiaAskRouter } from "./routes/sophia-ask.js";
 import { getAIProviderStatus } from "./ai/provider.js";
 import { getVoiceProviderStatus } from "./ai/voice-provider.js";
+import { getEmbeddingProviderStatus } from "./ai/embedding-provider.js";
+import { startRequestTiming } from "./lib/request-timing.js";
 
 export const app = express();
 const env = getEnv();
@@ -38,6 +41,7 @@ const allowedOrigins = new Set([
 ]);
 
 app.disable("x-powered-by");
+app.use(startRequestTiming);
 app.use(helmet());
 app.use(
   cors({
@@ -64,6 +68,14 @@ app.get("/health", (_request, response) => {
     service: API_SERVICE_NAME,
     ai: getAIProviderStatus(),
     voice: getVoiceProviderStatus(),
+    embeddings: getEmbeddingProviderStatus(),
+    deployment: {
+      render: process.env.RENDER === "true",
+      branch: process.env.RENDER_GIT_BRANCH ?? null,
+      commit: process.env.RENDER_GIT_COMMIT ?? null,
+      service: process.env.RENDER_SERVICE_NAME ?? null,
+      region: process.env.RENDER_REGION ?? null,
+    },
   });
 });
 
@@ -82,6 +94,7 @@ app.use("/api/simulation-sessions", simulationSessionsRouter);
 app.use("/api/simulation-sessions", simulationCoachingRouter);
 app.use("/api/capability-profile", capabilityProfileRouter);
 app.use("/api/learning-factory", learningFactoryRouter);
+app.use("/api/sophia", sophiaAskRouter);
 
 app.use((_request, response) => {
   response.status(404).json({ error: "Route not found" });

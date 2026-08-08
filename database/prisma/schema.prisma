@@ -42,6 +42,22 @@ enum ProcessingStatus {
   Cancelled
 }
 
+enum DocumentVersionRetrievalStatus {
+  PROCESSING
+  ACTIVE
+  SUPERSEDED
+  FAILED
+  ARCHIVED
+}
+
+enum KnowledgeChunkStatus {
+  PROCESSING
+  ACTIVE
+  SUPERSEDED
+  FAILED
+  ARCHIVED
+}
+
 enum KnowledgeSourceType {
   PDF
   DOCX
@@ -491,6 +507,7 @@ model Document {
   uploadedBy      String            @db.Uuid
   uploadedAt      DateTime          @default(now())
   currentVersion  Int               @default(1)
+  retrievalVersion Int              @default(1)
   status          DocumentStatus    @default(Ready)
   notes           String            @default("")
   createdAt       DateTime          @default(now())
@@ -614,17 +631,44 @@ model KnowledgeChunk {
   id             String          @id @default(uuid()) @db.Uuid
   sourceId       String          @db.Uuid
   documentId     String?         @db.Uuid
+  documentVersion Int            @default(1)
+  status          KnowledgeChunkStatus @default(ACTIVE)
   chunkNumber    Int
+  sectionTitle    String?
+  headingPath     Json?
+  pageNumber      Int?
+  slideNumber     Int?
+  sheetName       String?
+  rowStart        Int?
+  rowEnd          Int?
   text           String          @db.Text
   characterCount Int
   estimatedTokens Int
   metadata       Json
+  contentHash     String?
   createdAt      DateTime        @default(now())
   source         KnowledgeSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
   document       Document?       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  embedding      KnowledgeChunkEmbedding?
 
-  @@unique([sourceId, chunkNumber])
+  @@unique([sourceId, documentVersion, chunkNumber])
   @@index([documentId])
+  @@index([documentId, documentVersion, status])
+  @@index([sourceId, status])
+}
+
+model KnowledgeChunkEmbedding {
+  id          String   @id @default(uuid()) @db.Uuid
+  chunkId     String   @unique @db.Uuid
+  provider    String
+  model       String
+  dimensions  Int
+  contentHash String
+  embeddedAt  DateTime @default(now())
+  embedding   Unsupported("vector")
+  chunk       KnowledgeChunk @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+
+  @@index([provider, model, dimensions])
 }
 
 model ProcessingLog {
@@ -655,11 +699,17 @@ model DocumentVersion {
   uploadedBy  String           @db.Uuid
   uploadedAt  DateTime         @default(now())
   notes       String           @default("")
+  retrievalStatus DocumentVersionRetrievalStatus @default(ACTIVE)
+  processedAt DateTime?
+  retrievalReadyAt DateTime?
+  failedAt DateTime?
+  failureReason String?
   document    Document         @relation(fields: [documentId], references: [id], onDelete: Cascade)
   uploader    Profile          @relation("DocumentVersionUploader", fields: [uploadedBy], references: [id])
 
   @@unique([documentId, version])
   @@index([uploadedBy])
+  @@index([documentId, retrievalStatus])
 }
 
 model Membership {

@@ -20,6 +20,14 @@ export const PROCESSING_STATUSES = [
   "Failed",
   "Cancelled",
 ] as const;
+export const SOPHIA_MODES = [
+  "ASK",
+  "LEARN",
+  "PRACTICE",
+  "SIMULATE",
+  "ASSESS",
+  "COACH",
+] as const;
 export const SIMULATION_DIFFICULTIES = [
   "Beginner",
   "Intermediate",
@@ -56,6 +64,7 @@ export const DOCUMENT_MIME_TYPES = {
 
 export const NAVIGATION_ITEMS = [
   { label: "Dashboard", href: "/dashboard" },
+  { label: "Ask Sophia", href: "/ask-sophia" },
   { label: "Knowledge Studio", href: "/knowledge-studio" },
   { label: "Simulation Studio", href: "/simulation-studio" },
   { label: "Assessments", href: "/assessments" },

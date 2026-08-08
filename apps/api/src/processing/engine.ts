@@ -2,8 +2,10 @@ import type { DocumentFileType } from "@simforge/shared";
 import { prisma } from "../lib/prisma.js";
 import { downloadKnowledgeFile } from "../services/storage.js";
 import { analyzeKnowledge } from "../knowledge-intelligence/service.js";
-import { chunkText, estimateTokens } from "./chunker.js";
+import { chunkBlocks, estimateTokens } from "./chunker.js";
 import { detectLanguage, getExtractor } from "./extractors.js";
+import { embedKnowledgeChunks } from "../knowledge-retrieval/embeddings.js";
+import type { ExtractedBlock } from "./types.js";
 
 const words = (text: string) => text.trim() ? text.trim().split(/\s+/u).length : 0;
 
@@ -42,23 +44,40 @@ export class KnowledgeProcessingEngine {
       const extracted = await extractor.extract(buffer); const text = extracted.text.trim();
       if (!text) throw new Error("No extractable text was found in this source");
       await this.assertNotCancelled(job.id); await this.progress(job.id, source.id, 70);
-      const chunks = chunkText(text);
+      const documentVersion = document.currentVersion;
+      const blocks = extracted.blocks?.length ? extracted.blocks : text.split(/\n\s*\n/u).map((value, index): ExtractedBlock => ({ text: value.trim(), blockType: "paragraph", headingPath: [], order: index + 1 })).filter((block) => block.text);
+      const chunks = chunkBlocks(blocks, { documentVersion });
       const intelligenceSections = analyzeKnowledge(text);
       const duration = Date.now() - started;
       await prisma.$transaction([
-        prisma.knowledgeChunk.deleteMany({ where: { sourceId: source.id } }),
+        prisma.knowledgeChunk.deleteMany({ where: { sourceId: source.id, documentVersion, status: { in: ["PROCESSING", "FAILED"] } } }),
         prisma.knowledgeIntelligenceSection.deleteMany({ where: { sourceId: source.id } }),
-        prisma.knowledgeChunk.createMany({ data: chunks.map((chunk) => ({ ...chunk, sourceId: source.id, documentId: document.id, metadata: { ...chunk.metadata, sourceType: source.sourceType, fileName: document.fileName } })) }),
+        prisma.knowledgeChunk.createMany({ data: chunks.map((chunk) => ({ ...chunk, sourceId: source.id, documentId: document.id, documentVersion, status: "PROCESSING", headingPath: chunk.headingPath ?? undefined, metadata: { ...chunk.metadata, documentVersion, sourceType: source.sourceType, fileName: document.fileName } })) }),
         prisma.knowledgeIntelligenceSection.createMany({ data: intelligenceSections.map((section) => ({ ...section, sourceId: source.id })) }),
-        prisma.knowledgeSource.update({ where: { id: source.id }, data: { title: extracted.title ?? source.title, status: "Completed", progress: 100, extractedText: text, pageCount: extracted.unitCount, wordCount: words(text), characterCount: text.length, estimatedTokens: estimateTokens(text), language: detectLanguage(text), processingDurationMs: duration, processedAt: new Date(), failureReason: null } }),
-        prisma.processingJob.update({ where: { id: job.id }, data: { status: "Completed", progress: 100, completedAt: new Date(), durationMs: duration, failureReason: null, errorMessage: null } }),
+        prisma.knowledgeSource.update({ where: { id: source.id }, data: { title: extracted.title ?? source.title, status: "Processing", progress: 85, extractedText: text, pageCount: extracted.unitCount, wordCount: words(text), characterCount: text.length, estimatedTokens: estimateTokens(text), language: detectLanguage(text), processingDurationMs: duration, processedAt: new Date(), failureReason: null } }),
       ]);
+      const createdChunks = await prisma.knowledgeChunk.findMany({ where: { sourceId: source.id, documentVersion, status: "PROCESSING" }, select: { id: true, text: true, contentHash: true } });
+      const embeddingResult = await embedKnowledgeChunks(createdChunks);
+      await this.assertNotCancelled(job.id); await this.progress(job.id, source.id, 95);
+      const completedAt = new Date();
+      await prisma.$transaction([
+        prisma.documentVersion.updateMany({ where: { documentId: document.id, version: { not: documentVersion }, retrievalStatus: "ACTIVE" }, data: { retrievalStatus: "SUPERSEDED" } }),
+        prisma.knowledgeChunk.updateMany({ where: { documentId: document.id, documentVersion: { not: documentVersion }, status: "ACTIVE" }, data: { status: "SUPERSEDED" } }),
+        prisma.documentVersion.updateMany({ where: { documentId: document.id, version: documentVersion }, data: { retrievalStatus: "ACTIVE", processedAt: completedAt, retrievalReadyAt: completedAt, failureReason: null, failedAt: null } }),
+        prisma.knowledgeChunk.updateMany({ where: { sourceId: source.id, documentVersion, status: "PROCESSING" }, data: { status: "ACTIVE" } }),
+        prisma.document.update({ where: { id: document.id }, data: { retrievalVersion: documentVersion } }),
+        prisma.knowledgeSource.update({ where: { id: source.id }, data: { status: "Completed", progress: 100, processingDurationMs: Date.now() - started, processedAt: completedAt, failureReason: null } }),
+        prisma.processingJob.update({ where: { id: job.id }, data: { status: "Completed", progress: 100, completedAt, durationMs: Date.now() - started, failureReason: null, errorMessage: null } }),
+      ]);
+      if (!embeddingResult.providerConfigured) await this.log(source.id, job.id, "embedding-skipped", "Embedding provider unavailable; lexical retrieval fallback active", "Warning");
       await this.log(source.id, job.id, "completed", `Processing completed with ${chunks.length} chunks and ${intelligenceSections.length} intelligence suggestions`);
     } catch (error) {
       const cancelled = error instanceof Error && error.message === "PROCESSING_CANCELLED"; const message = error instanceof Error ? error.message : "Unknown processing failure";
       const status = cancelled ? "Cancelled" : "Failed"; const duration = Date.now() - started;
       await prisma.$transaction([
         prisma.knowledgeSource.update({ where: { id: source.id }, data: { status, progress: 0, failureReason: cancelled ? null : message, processingDurationMs: duration } }),
+        prisma.documentVersion.updateMany({ where: { documentId: document.id, version: document.currentVersion }, data: { retrievalStatus: cancelled ? "ARCHIVED" : "FAILED", failedAt: cancelled ? undefined : new Date(), failureReason: cancelled ? null : message } }),
+        prisma.knowledgeChunk.updateMany({ where: { sourceId: source.id, documentVersion: document.currentVersion, status: "PROCESSING" }, data: { status: cancelled ? "ARCHIVED" : "FAILED" } }),
         prisma.processingJob.update({ where: { id: job.id }, data: { status, progress: 0, cancelledAt: cancelled ? new Date() : undefined, failureReason: cancelled ? null : "PROCESSING_ERROR", errorMessage: cancelled ? null : message, durationMs: duration } }),
       ]);
       await this.log(source.id, job.id, cancelled ? "cancelled" : "failed", cancelled ? "Processing cancelled" : message, cancelled ? "Info" : "Error");
@@ -78,7 +97,7 @@ export class KnowledgeProcessingEngine {
   async reprocess(documentId: string, organizationId: string) { const source = await prisma.knowledgeSource.findFirst({ where: { documentId, organizationId } }); if (source) { const active = await prisma.processingJob.count({ where: { sourceId: source.id, status: { in: ["Queued", "Processing"] } } }); if (active) throw new Error("Source is already processing"); } return this.queue(documentId, organizationId); }
   private async assertNotCancelled(jobId: string) { const job = await prisma.processingJob.findUnique({ where: { id: jobId }, select: { cancelRequestedAt: true } }); if (job?.cancelRequestedAt) throw new Error("PROCESSING_CANCELLED"); }
   private async progress(jobId: string, sourceId: string, progress: number) { await prisma.$transaction([prisma.processingJob.update({ where: { id: jobId }, data: { progress } }), prisma.knowledgeSource.update({ where: { id: sourceId }, data: { status: "Processing", progress } })]); }
-  private async log(sourceId: string, jobId: string, event: string, message: string, level: "Info" | "Error" = "Info") { await prisma.processingLog.create({ data: { sourceId, jobId, event, message, level } }); }
+  private async log(sourceId: string, jobId: string, event: string, message: string, level: "Info" | "Warning" | "Error" = "Info") { await prisma.processingLog.create({ data: { sourceId, jobId, event, message, level } }); }
 }
 
 export const processingEngine = new KnowledgeProcessingEngine();
