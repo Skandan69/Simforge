@@ -83,8 +83,8 @@ simulationSessionsRouter.get(
 simulationSessionsRouter.post("/", async (request, response) => {
   const { organizationId, role } = getWorkspaceRequest(request).workspace;
   const user = getWorkspaceRequest(request).authUser;
-  const { simulationId } = z
-    .object({ simulationId: z.string().uuid() })
+  const { simulationId, assignmentId } = z
+    .object({ simulationId: z.string().uuid(), assignmentId: z.string().uuid().optional() })
     .parse(request.body);
   const simulation = await prisma.simulation.findFirst({
     where: { id: simulationId, organizationId },
@@ -103,25 +103,48 @@ simulationSessionsRouter.post("/", async (request, response) => {
     fallback: () => createPlaceholderOpeningMessage(simulation.title, simulation.persona?.role),
     personaRole: simulation.persona?.role,
   });
-  const session = await prisma.simulationSession.create({
-    data: {
-      organizationId,
-      simulationId: simulation.id,
-      learnerId: user.id,
-      messages: {
-        create: [
-          {
-            role: "system",
-            content: `Simulation session started for ${simulation.title}.`,
-          },
-          {
-            role: "ai",
-            content: openingMessage,
-          },
-        ],
+  const session = await prisma.$transaction(async (transaction) => {
+    let assignment: { id: string } | null = null;
+    if (assignmentId) {
+      assignment = await transaction.practiceAssignment.findFirst({
+        where: {
+          id: assignmentId,
+          organizationId,
+          learnerId: user.id,
+          simulationId: simulation.id,
+          status: { in: ["ASSIGNED", "IN_PROGRESS"] },
+        },
+        select: { id: true },
+      });
+      if (!assignment) throw new HttpError("Practice assignment is not available for this simulation", 404, "PRACTICE_ASSIGNMENT_NOT_FOUND");
+    }
+    const created = await transaction.simulationSession.create({
+      data: {
+        organizationId,
+        simulationId: simulation.id,
+        learnerId: user.id,
+        messages: {
+          create: [
+            {
+              role: "system",
+              content: `Simulation session started for ${simulation.title}.`,
+            },
+            {
+              role: "ai",
+              content: openingMessage,
+            },
+          ],
+        },
       },
-    },
-    include: includeReport,
+      include: includeReport,
+    });
+    if (assignment) {
+      await transaction.practiceAssignment.update({
+        where: { id: assignment.id },
+        data: { status: "IN_PROGRESS", startedAt: new Date(), sessionId: created.id },
+      });
+    }
+    return created;
   });
   response.status(201).json(session);
 });
@@ -335,6 +358,10 @@ simulationSessionsRouter.post("/:id/evaluate", async (request, response) => {
         completedAt: assessedAt,
         overallScore: result.overallScore,
       },
+    });
+    await transaction.practiceAssignment.updateMany({
+      where: { organizationId, sessionId: session.id, status: { in: ["ASSIGNED", "IN_PROGRESS"] } },
+      data: { status: "COMPLETED", completedAt: assessedAt },
     });
   }, { timeout: 15_000 });
   response.json(await getSession(session.id, organizationId));

@@ -4,9 +4,9 @@ export default async function RunSimulationPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ start?: string }>;
+  searchParams: Promise<{ start?: string; assignmentId?: string }>;
 }) {
   const { id } = await params;
-  const { start } = await searchParams;
-  return <SophiaSimulationRun simulationId={id} autoStart={start === "true"} />;
+  const { start, assignmentId } = await searchParams;
+  return <SophiaSimulationRun simulationId={id} autoStart={start === "true"} assignmentId={assignmentId} />;
 }

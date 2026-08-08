@@ -21,5 +21,7 @@ test("evaluation transaction contains writes only and uses a secondary timeout s
   const transaction = route.slice(route.indexOf("prisma.$transaction"));
   assert.doesNotMatch(transaction, /generateSophiaEvaluation|loadSophiaPromptContext/u);
   assert.match(transaction, /updateLearnerCapabilityProfile/u);
+  assert.match(transaction, /practiceAssignment\.updateMany/u);
+  assert.match(transaction, /status: "COMPLETED"/u);
   assert.match(transaction, /timeout: 15_000/u);
 });

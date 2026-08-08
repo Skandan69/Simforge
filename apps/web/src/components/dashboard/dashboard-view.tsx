@@ -18,6 +18,7 @@ const kpiConfig = [
 ] as const;
 
 const quickActions = [
+  { label: "View Team Intelligence", description: "Review learner capability gaps", href: "/learners", icon: Users },
   { label: "View Capability Profile", description: "Review capability progress", href: "/capability-profile", icon: Gauge },
   { label: "Invite users", description: "Grow your workspace team", href: "/settings", icon: UserPlus },
   { label: "Create knowledge base", description: "Prepare source material", href: "/knowledge-studio", icon: BookOpen },
