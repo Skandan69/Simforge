@@ -1,4 +1,4 @@
-import { WORKFORCE_CAPABILITIES, type LearningFactoryAssetType, type LearningFactoryDraftStatus, type WorkforceCapability } from "@simforge/shared";
+import { DEFAULT_EVALUATION_CRITERIA, WORKFORCE_CAPABILITIES, type LearningFactoryAssetType, type LearningFactoryDraftStatus, type LearningFactoryPublishSimulationInput, type SaveSimulationInput, type SimulationDifficulty, type UserRole, type WorkforceCapability } from "@simforge/shared";
 
 export interface LearningFactorySection {
   id: string;
@@ -70,4 +70,88 @@ export function learningFactoryScope(id: string, organizationId: string) {
 export function reviewDraftTransition(current: LearningFactoryDraftStatus, action: "approve" | "reject") {
   if (current === "PUBLISHED") throw new Error("Published drafts cannot be changed");
   return action === "approve" ? "APPROVED" as const : "REJECTED" as const;
+}
+
+export const LEARNING_FACTORY_PUBLISH_ROLES: UserRole[] = ["Owner", "Admin", "Trainer", "Manager"];
+
+export function canPublishLearningFactorySimulation(role: UserRole) {
+  return LEARNING_FACTORY_PUBLISH_ROLES.includes(role);
+}
+
+export function publishEligibility(input: {
+  assetType: LearningFactoryAssetType;
+  status: LearningFactoryDraftStatus;
+  publishedSimulationId?: string | null;
+}) {
+  if (input.publishedSimulationId || input.status === "PUBLISHED") return { eligible: false as const, code: "DRAFT_ALREADY_PUBLISHED", message: "This draft has already created a simulation." };
+  if (input.assetType !== "SIMULATION") return { eligible: false as const, code: "DRAFT_ASSET_TYPE_NOT_SUPPORTED", message: "Only simulation drafts can create simulations." };
+  if (input.status !== "APPROVED") return { eligible: false as const, code: "DRAFT_NOT_APPROVED", message: "Approve this simulation draft before creating a simulation." };
+  return { eligible: true as const };
+}
+
+const text = (value: unknown, fallback: string, max = 2000) => {
+  const candidate = typeof value === "string" ? value.trim() : "";
+  return (candidate || fallback).slice(0, max);
+};
+
+const numberValue = (value: unknown, fallback: number, min: number, max: number) => {
+  const candidate = typeof value === "number" && Number.isFinite(value) ? Math.round(value) : fallback;
+  return Math.max(min, Math.min(max, candidate));
+};
+
+const arrayText = (value: unknown) => Array.isArray(value) ? value.map((item) => typeof item === "string" ? item.trim() : "").filter(Boolean) : [];
+
+export function mapDraftToSimulationInput(input: {
+  draft: {
+    title: string;
+    description: string;
+    capabilityMappings: unknown;
+    payload: Record<string, unknown>;
+  };
+  blueprint?: { industry?: string | null } | null;
+  source?: { knowledgeBaseId: string; knowledgeBase: { name: string; department: string } } | null;
+  criteriaIds: string[];
+  overrides?: LearningFactoryPublishSimulationInput;
+}): SaveSimulationInput {
+  const payload = input.draft.payload ?? {};
+  const overrides = input.overrides ?? {};
+  const capabilities = Array.isArray(input.draft.capabilityMappings) ? input.draft.capabilityMappings.filter((item): item is WorkforceCapability => typeof item === "string" && WORKFORCE_CAPABILITIES.includes(item as WorkforceCapability)) : [];
+  const objectives = overrides.objectives?.map((item) => item.trim()).filter(Boolean)
+    ?? arrayText(payload.objectives);
+  const sourceName = input.source?.knowledgeBase.name ?? "Company knowledge";
+  return {
+    title: text(overrides.title, input.draft.title.replace(/^Practice:\s*/iu, ""), 160),
+    description: text(overrides.description, input.draft.description, 2000),
+    industry: text(overrides.industry, input.blueprint?.industry ?? "General", 100),
+    department: text(overrides.department, input.source?.knowledgeBase.department ?? "General", 100),
+    jobRole: text(overrides.jobRole, "Learner", 120),
+    category: text(overrides.category, capabilities[0] ?? "Knowledge-grounded practice", 100),
+    difficulty: overrides.difficulty ?? (payload.suggestedDifficulty as SimulationDifficulty | undefined) ?? "Intermediate",
+    status: "Draft",
+    estimatedMinutes: numberValue(overrides.estimatedMinutes, 10, 1, 240),
+    personaId: overrides.personaId ?? null,
+    scenarioSetup: text(overrides.scenarioSetup, text(payload.scenarioSetup, `Practice applying guidance from ${sourceName}.`, 10000), 10000),
+    successCriteria: text(overrides.successCriteria, text(payload.successCriteria, "The learner applies approved company guidance accurately and explains the next step clearly.", 5000), 5000),
+    objectives: objectives.length ? objectives.slice(0, 30) : ["Apply approved knowledge accurately", "Explain the decision using company guidance"],
+    knowledgeBaseIds: input.source ? [input.source.knowledgeBaseId] : [],
+    criterionIds: input.criteriaIds,
+  };
+}
+
+export const capabilityCriterionHints: Record<WorkforceCapability, string[]> = {
+  Communication: ["Communication", "Professionalism", "Confidence"],
+  "Product Knowledge": ["Knowledge accuracy", "Product Knowledge"],
+  "Policy Compliance": ["Compliance", "Process adherence", "Policy Compliance"],
+  Empathy: ["Empathy", "Communication"],
+  "Problem Solving": ["Problem solving", "Problem Solving"],
+  "Decision Making": ["Process adherence", "Problem solving", "Decision Making"],
+};
+
+export function criterionNamesForCapabilities(capabilities: WorkforceCapability[]) {
+  const names = new Set<string>();
+  for (const capability of capabilities.length ? capabilities : ["Communication" as WorkforceCapability]) {
+    for (const name of capabilityCriterionHints[capability]) names.add(name);
+  }
+  if (!names.size) DEFAULT_EVALUATION_CRITERIA.slice(0, 2).forEach((name) => names.add(name));
+  return [...names].slice(0, 8);
 }

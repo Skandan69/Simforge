@@ -483,6 +483,8 @@ export type LearningFactoryDraftStatus = "DRAFT" | "APPROVED" | "REJECTED" | "PU
 export interface LearningFactoryDraftResponse {
   id: string;
   sourceDocumentId: string | null;
+  publishedSimulationId: string | null;
+  publishedAt: string | null;
   title: string;
   description: string;
   assetType: LearningFactoryAssetType;
@@ -499,6 +501,7 @@ export interface LearningFactoryDraftResponse {
 
 export interface LearningFactoryDraftListResponse {
   canManage: boolean;
+  canPublishSimulation: boolean;
   drafts: LearningFactoryDraftResponse[];
 }
 
@@ -506,6 +509,28 @@ export interface LearningFactoryGenerateResponse {
   generated: number;
   skippedDuplicates: number;
   drafts: LearningFactoryDraftResponse[];
+}
+
+export interface LearningFactoryPublishSimulationInput {
+  title?: string;
+  description?: string;
+  industry?: string;
+  department?: string;
+  jobRole?: string;
+  category?: string;
+  difficulty?: SimulationDifficulty;
+  estimatedMinutes?: number;
+  scenarioSetup?: string;
+  successCriteria?: string;
+  objectives?: string[];
+  personaId?: string | null;
+  criterionIds?: string[];
+}
+
+export interface LearningFactoryPublishSimulationResponse {
+  draft: LearningFactoryDraftResponse;
+  simulation: SimulationDetail;
+  alreadyPublished: boolean;
 }
 
 export type CoachingGeneratedBy = "DETERMINISTIC" | "AI";
