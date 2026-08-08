@@ -80,24 +80,31 @@ const STOP_WORDS = new Set([
   "after",
   "and",
   "are",
+  "be",
+  "can",
+  "could",
   "before",
   "current",
   "does",
   "for",
+  "give",
   "from",
   "how",
   "in",
   "into",
   "is",
   "it",
+  "may",
   "of",
   "or",
   "policy",
   "question",
   "requires",
+  "should",
   "the",
   "this",
   "to",
+  "we",
   "what",
   "when",
   "where",
@@ -129,6 +136,39 @@ function numbers(value: string) {
 
 function tokens(value: string) {
   return new Set((value.toLowerCase().match(TOKEN_PATTERN) ?? []).filter((term) => term.length >= 3 && !STOP_WORDS.has(term)));
+}
+
+function conceptExpansions(value: string) {
+  const normalized = value.toLowerCase();
+  const expanded = new Set<string>();
+  if (/\b(goodwill|service)?\s*credit\b|\bcompensation\b|\bcompensate\b/u.test(normalized)) {
+    ["goodwill", "credit", "service", "compensation", "compensate"].forEach((term) => expanded.add(term));
+  }
+  if (/\breturn\s+(period|window|deadline)\b|\b(after|past|outside|expired|late)\b.{0,40}\b(return|refund)\b|\b(return|refund)\b.{0,40}\b(after|past|outside|expired|late)\b/u.test(normalized)) {
+    ["return", "refund", "window", "period", "deadline", "expired", "late"].forEach((term) => expanded.add(term));
+  }
+  if (/\bexception\b|\bexceptions\b|\boutside policy\b|\bafter\s+the\s+return\s+window\b/u.test(normalized)) {
+    ["exception", "exceptions", "manager", "approval", "approved"].forEach((term) => expanded.add(term));
+  }
+  if (/\bdollar\b|\bdollars\b|\bamount\b|\blimit\b|\bhow much\b|\busd\b|\b\$\d+/u.test(normalized)) {
+    ["usd", "dollar", "amount", "limit"].forEach((term) => expanded.add(term));
+  }
+  if (/\boutage\b|\bdowntime\b|\bplatform issue\b|\bservice interruption\b/u.test(normalized)) {
+    ["outage", "platform", "verified"].forEach((term) => expanded.add(term));
+  }
+  return expanded;
+}
+
+export function expandedTokens(value: string) {
+  return new Set([...tokens(value), ...conceptExpansions(value)]);
+}
+
+export function lexicalTsQuery(value: string) {
+  const terms = [...expandedTokens(value)]
+    .map((term) => term.toLowerCase().match(TOKEN_PATTERN)?.join("") ?? "")
+    .filter((term) => term.length >= 3 && !STOP_WORDS.has(term))
+    .slice(0, 32);
+  return [...new Set(terms)].join(" | ");
 }
 
 function identifiers(value: string) {
@@ -214,10 +254,10 @@ export function reciprocalRankFusion(lexical: RetrievalCandidate[], vector: Retr
 }
 
 export function deterministicRerank(candidate: RetrievalCandidate & { rrfScore: number }, query: string) {
-  const queryTerms = tokens(query);
+  const queryTerms = expandedTokens(query);
   const queryNumbers = numbers(query);
   const text = candidateSearchText(candidate).toLowerCase();
-  const candidateTerms = tokens(text);
+  const candidateTerms = expandedTokens(text);
   const candidateNumbers = numbers(text);
   const queryIdentifiers = identifiers(query);
   const candidateIdentifiers = identifiers(text);
@@ -233,8 +273,8 @@ export function deterministicRerank(candidate: RetrievalCandidate & { rrfScore: 
 }
 
 export function assessEvidenceRelevance(candidate: RetrievalCandidate, query: string): EvidenceRelevance {
-  const queryTerms = tokens(query);
-  const candidateTerms = tokens(candidateSearchText(candidate));
+  const queryTerms = expandedTokens(query);
+  const candidateTerms = expandedTokens(candidateSearchText(candidate));
   const queryIdentifiers = identifiers(query);
   const candidateIdentifiers = identifiers(candidateSearchText(candidate));
   const queryNumbers = numbers(query);
@@ -476,6 +516,7 @@ export class KnowledgeRetrievalService {
     const exactIdentifiers = identifierArray(input.query);
     const queryDocumentNumber = documentNumber(input.query);
     const exactLookup = exactIdentifiers.length > 0 || Boolean(queryDocumentNumber);
+    const lexicalQuery = lexicalTsQuery(input.query);
     if (debugTimings) debugTimings.exactLookup = exactLookup;
     const effectiveCandidateLimit = exactLookup ? Math.max(10, limit * Math.max(1, exactIdentifiers.length) * 2) : candidateLimit;
     const cachedExactCandidates = exactLookup ? getCachedExactLookupCandidates(input.scope.organizationId, kbIds, docIds) : null;
@@ -518,15 +559,17 @@ export class KnowledgeRetrievalService {
         AND ks."status" = 'Completed'
         AND kc."status" = 'ACTIVE'
         AND d."retrievalVersion" = kc."documentVersion"
-        AND ($3::uuid[] IS NULL OR kb."id" = ANY($3::uuid[]))
-        AND ($4::uuid[] IS NULL OR d."id" = ANY($4::uuid[]))
-        AND to_tsvector('english', kc."text") @@ websearch_to_tsquery('english', $2)
-      LIMIT $5`,
+        AND ($2::uuid[] IS NULL OR kb."id" = ANY($2::uuid[]))
+        AND ($3::uuid[] IS NULL OR d."id" = ANY($3::uuid[]))
+        AND $5::text <> ''
+        AND to_tsvector('english', kc."text") @@ to_tsquery('english', $5)
+      ORDER BY ts_rank_cd(to_tsvector('english', kc."text"), to_tsquery('english', $5)) DESC
+      LIMIT $4`,
       input.scope.organizationId,
-      input.query,
       kbIds,
       docIds,
       effectiveCandidateLimit,
+      lexicalQuery,
     );
     });
 

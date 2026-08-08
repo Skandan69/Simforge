@@ -62,7 +62,7 @@ export function AskSophiaView() {
     <Card className="border-primary/20">
       <CardHeader>
         <CardTitle className="flex items-center gap-2"><MessageCircleQuestion className="size-5 text-primary" />Ask company knowledge</CardTitle>
-        <CardDescription>This is not a separate chatbot. It is Sophia operating in ASK mode over your governed Knowledge Studio content.</CardDescription>
+        <CardDescription>This is not a separate chatbot. It is Sophia operating in ASK mode over your governed Knowledge Studio content. Each question is answered independently, so include the policy, customer, or scenario context Sophia should use.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
         {knowledgeBases.length > 0 && <div className="space-y-2">
@@ -72,7 +72,8 @@ export function AskSophiaView() {
           </div>
           <p className="text-xs text-muted-foreground">{scopedNames.length ? `Searching: ${scopedNames.join(", ")}` : "Searching all active knowledge bases."}</p>
         </div>}
-        <Textarea value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Example: What is our refund exception policy after seven days?" rows={4} aria-label="Ask Sophia a question" />
+        <Textarea value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Example: For a refund request after the return window, what exception allows a goodwill credit and what approval is required?" rows={4} aria-label="Ask Sophia a question" />
+        <p className="text-xs leading-5 text-muted-foreground">Tip: ASK mode is stateless. For follow-up questions, restate the key context so Sophia can retrieve the right evidence.</p>
         {error && <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
         <div className="flex justify-end">
           <Button onClick={() => void ask()} disabled={loading || !question.trim()}>{loading && <Loader2 className="animate-spin" />}Ask Sophia</Button>

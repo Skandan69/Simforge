@@ -7,7 +7,7 @@ process.env.SUPABASE_URL ??= "https://example.supabase.co";
 process.env.SUPABASE_PUBLISHABLE_KEY ??= "sb_publishable_test";
 process.env.SUPABASE_SERVICE_ROLE_KEY ??= "service_role_test";
 
-const { assessEvidenceRelevance, calculateConfidence, reciprocalRankFusion, selectEvidence, toAskSource } = await import("./service.js");
+const { assessEvidenceRelevance, calculateConfidence, expandedTokens, lexicalTsQuery, reciprocalRankFusion, selectEvidence, toAskSource } = await import("./service.js");
 
 const base = {
   documentId: "document-a",
@@ -133,4 +133,32 @@ test("numeric evidence uses exact number tokens instead of substring matches", (
   const relevanceRight = assessEvidenceRelevance(right, "How many business days is the 28 day refund review window?");
   assert.equal(relevanceWrong.numberOverlap, 0);
   assert.equal(relevanceRight.numberOverlap, 1);
+});
+
+test("natural policy-exception wording expands to related retrieval concepts", () => {
+  const query = "When can a goodwill credit be offered after the return window, and what is the dollar limit?";
+  const tsQuery = lexicalTsQuery(query);
+  assert.match(tsQuery, /goodwill/u);
+  assert.match(tsQuery, /credit/u);
+  assert.match(tsQuery, /usd/u);
+  assert.match(tsQuery, /exception/u);
+  assert.match(tsQuery, /\|/u);
+});
+
+test("goodwill-credit paraphrases remain relevant without weakening unrelated no-answer questions", () => {
+  const evidence = candidate("goodwill", "Policy exception: a goodwill credit up to 25 USD may be offered after the return window only when a verified platform outage lasted more than 4 hours and the manager approves the credit.");
+  const paraphrases = [
+    "Can we give a customer credit after the return period?",
+    "Are there exceptions after the return window?",
+    "How much goodwill credit can be given for a late return?",
+    "What exception allows compensation after the return deadline?",
+    "Can support offer compensation when the return period has expired?",
+  ];
+  for (const query of paraphrases) {
+    const relevance = assessEvidenceRelevance(evidence, query);
+    assert.equal(relevance.strong, true, query);
+  }
+
+  assert.equal(assessEvidenceRelevance(evidence, "What is the warranty replacement policy for lunar mining helmets?").strong, false);
+  assert.equal(expandedTokens("lunar mining helmets").has("goodwill"), false);
 });

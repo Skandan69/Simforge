@@ -11,4 +11,5 @@ test("Ask Sophia view keeps the v1 UX grounded in answers and sources", () => {
   assert.match(source, /Sources/u);
   assert.match(source, /insufficientEvidence/u);
   assert.match(source, /This is not a separate chatbot/u);
+  assert.match(source, /ASK mode is stateless/u);
 });
