@@ -6,7 +6,7 @@ import { HttpError } from "../lib/http-error.js";
 import { requireAuth } from "../middleware/auth.js";
 import { getWorkspaceRequest, requireWorkspace } from "../middleware/workspace.js";
 import { canEvaluateSession } from "../services/simulation-runtime.js";
-import { buildDeterministicCoaching, canReadCoaching, coachingIdentity, coachingReadiness, coachingScope, generateCoachingWithFallback, type CoachingInput } from "../services/ai-coach.js";
+import { buildDeterministicCoaching, canReadCoaching, coachingIdentity, coachingReadiness, generateCoachingWithFallback, simulationSessionCoachingScope, type CoachingInput } from "../services/ai-coach.js";
 
 function mapInsight(record: any): SimulationCoachingInsightResponse {
   return { id: record.id, sessionId: record.sessionId, learnerId: record.learnerId, summary: record.summary, strengths: record.strengths, improvementAreas: record.improvementAreas, capabilityChanges: record.capabilityChanges, knowledgeGaps: record.knowledgeGaps, nextBestAction: record.nextBestAction, estimatedImprovement: record.estimatedImprovement, generatedBy: record.generatedBy, createdAt: record.createdAt.toISOString(), updatedAt: record.updatedAt.toISOString() };
@@ -29,7 +29,7 @@ function transientInsight(session: Awaited<ReturnType<typeof sessionForCoaching>
 
 async function sessionForCoaching(id: string, organizationId: string) {
   const session = await prisma.simulationSession.findFirst({
-    where: coachingScope(id, organizationId),
+    where: simulationSessionCoachingScope(id, organizationId),
     include: {
       evaluation: true,
       capabilityScores: true,
