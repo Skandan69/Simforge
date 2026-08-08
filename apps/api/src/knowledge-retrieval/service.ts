@@ -469,7 +469,7 @@ export class KnowledgeRetrievalService {
       stages: [],
     } : null;
     const limit = input.limit ?? 5;
-    const candidateLimit = Math.max(50, limit * 10);
+    const candidateLimit = Math.max(20, limit * 4);
     const maxEvidenceTokens = input.maxEvidenceTokens ?? 2_500;
     const kbIds = input.knowledgeBaseIds?.length ? input.knowledgeBaseIds : null;
     const docIds = input.documentIds?.length ? input.documentIds : null;
