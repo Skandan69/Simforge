@@ -9,6 +9,7 @@ import { knowledgeRetrievalService, toAskSource } from "../knowledge-retrieval/s
 import { prisma } from "../lib/prisma.js";
 import { HttpError } from "../lib/http-error.js";
 import { debugTimingsRequested, nowMs, requestTimingSummary, timeRequestStage } from "../lib/request-timing.js";
+import { TtlCache } from "../lib/ttl-cache.js";
 
 const askSchema = z.object({
   question: z.string().trim().min(1).max(4000),
@@ -18,6 +19,8 @@ const askSchema = z.object({
 export const sophiaAskRouter = Router();
 sophiaAskRouter.use(requireAuth, requireWorkspace);
 
+const askScopeCache = new TtlCache<string, number>(15_000);
+
 sophiaAskRouter.post("/ask", async (request, response) => {
   const routeStartedAt = nowMs();
   const includeDebugTimings = debugTimingsRequested(request);
@@ -26,8 +29,10 @@ sophiaAskRouter.post("/ask", async (request, response) => {
   const input = askSchema.parse(request.body ?? {});
 
   if (input.knowledgeBaseIds?.length) {
-    const activeCount = await timeRequestStage(request, "ask.scopeValidation", () => prisma.knowledgeBase.count({ where: { id: { in: input.knowledgeBaseIds }, organizationId: workspace.organizationId, status: "Active" } }));
-    if (activeCount !== new Set(input.knowledgeBaseIds).size) throw new HttpError("One or more knowledge bases are unavailable", 404, "KNOWLEDGE_SCOPE_NOT_FOUND");
+    const uniqueKnowledgeBaseIds = [...new Set(input.knowledgeBaseIds)];
+    const scopeCacheKey = `${workspace.organizationId}:${[...uniqueKnowledgeBaseIds].sort().join(",")}`;
+    const activeCount = askScopeCache.get(scopeCacheKey) ?? await timeRequestStage(request, "ask.scopeValidation", () => askScopeCache.getOrSet(scopeCacheKey, () => prisma.knowledgeBase.count({ where: { id: { in: uniqueKnowledgeBaseIds }, organizationId: workspace.organizationId, status: "Active" } })));
+    if (activeCount !== uniqueKnowledgeBaseIds.length) throw new HttpError("One or more knowledge bases are unavailable", 404, "KNOWLEDGE_SCOPE_NOT_FOUND");
   }
 
   const retrieval = await timeRequestStage(request, "ask.retrieval", () => knowledgeRetrievalService.retrieve({
