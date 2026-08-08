@@ -8,6 +8,7 @@ import { getWorkspaceRequest, requireWorkspace } from "../middleware/workspace.j
 import { knowledgeRetrievalService, toAskSource } from "../knowledge-retrieval/service.js";
 import { prisma } from "../lib/prisma.js";
 import { HttpError } from "../lib/http-error.js";
+import { debugTimingsRequested, nowMs, requestTimingSummary, timeRequestStage } from "../lib/request-timing.js";
 
 const askSchema = z.object({
   question: z.string().trim().min(1).max(4000),
@@ -18,21 +19,30 @@ export const sophiaAskRouter = Router();
 sophiaAskRouter.use(requireAuth, requireWorkspace);
 
 sophiaAskRouter.post("/ask", async (request, response) => {
+  const routeStartedAt = nowMs();
+  const includeDebugTimings = debugTimingsRequested(request);
   const workspace = getWorkspaceRequest(request).workspace;
   const user = getWorkspaceRequest(request).authUser;
   const input = askSchema.parse(request.body ?? {});
 
   if (input.knowledgeBaseIds?.length) {
-    const activeCount = await prisma.knowledgeBase.count({ where: { id: { in: input.knowledgeBaseIds }, organizationId: workspace.organizationId, status: "Active" } });
+    const activeCount = await timeRequestStage(request, "ask.scopeValidation", () => prisma.knowledgeBase.count({ where: { id: { in: input.knowledgeBaseIds }, organizationId: workspace.organizationId, status: "Active" } }));
     if (activeCount !== new Set(input.knowledgeBaseIds).size) throw new HttpError("One or more knowledge bases are unavailable", 404, "KNOWLEDGE_SCOPE_NOT_FOUND");
   }
 
-  const retrieval = await knowledgeRetrievalService.retrieve({
+  const retrieval = await timeRequestStage(request, "ask.retrieval", () => knowledgeRetrievalService.retrieve({
     scope: { organizationId: workspace.organizationId, userId: user.id, role: workspace.role },
     query: input.question,
     mode: "ASK",
     knowledgeBaseIds: input.knowledgeBaseIds,
-  });
+    debugTimings: includeDebugTimings,
+  }));
+
+  const makeDebugTimings = (answerGeneration: { invoked: boolean; durationMs: number }) => includeDebugTimings ? {
+    ...(requestTimingSummary(request) ?? { requestTotalMs: Math.round(nowMs() - routeStartedAt), stages: [] }),
+    retrieval: retrieval.debugTimings,
+    answerGeneration,
+  } : undefined;
 
   if (retrieval.insufficientEvidence) {
     const payload: AskSophiaResponse = {
@@ -41,6 +51,7 @@ sophiaAskRouter.post("/ask", async (request, response) => {
       sources: retrieval.evidence.map(toAskSource),
       insufficientEvidence: true,
       confidence: retrieval.confidence,
+      debugTimings: makeDebugTimings({ invoked: false, durationMs: 0 }),
     };
     response.json(payload);
     return;
@@ -48,15 +59,20 @@ sophiaAskRouter.post("/ask", async (request, response) => {
 
   const provider = getAIProvider();
   let answer = deterministicAskAnswer(retrieval.evidence);
+  let answerGeneration = { invoked: false, durationMs: 0 };
   if (provider) {
     try {
+      const answerStartedAt = nowMs();
+      answerGeneration.invoked = true;
       answer = await provider.generateTrainerResponse({
         systemPrompt: buildAskSophiaPrompt(retrieval.evidence),
         messages: [{ role: "learner", content: input.question }],
       });
+      answerGeneration.durationMs = Math.round(nowMs() - answerStartedAt);
       answer = sanitizeEvidenceReferences(answer, retrieval.evidence.map((item) => item.evidenceId));
       if (!answer) answer = deterministicAskAnswer(retrieval.evidence);
     } catch (error) {
+      answerGeneration.durationMs = answerGeneration.durationMs || Math.round(nowMs() - routeStartedAt);
       console.warn("Ask Sophia provider failed; deterministic grounded fallback active", { provider: provider.name, errorType: error instanceof Error ? error.name : "UnknownError" });
       answer = deterministicAskAnswer(retrieval.evidence);
     }
@@ -68,6 +84,7 @@ sophiaAskRouter.post("/ask", async (request, response) => {
     sources: retrieval.evidence.map(toAskSource),
     insufficientEvidence: false,
     confidence: retrieval.confidence,
+    debugTimings: makeDebugTimings(answerGeneration),
   };
   response.json(payload);
 });

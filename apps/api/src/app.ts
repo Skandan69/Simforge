@@ -27,6 +27,7 @@ import { sophiaAskRouter } from "./routes/sophia-ask.js";
 import { getAIProviderStatus } from "./ai/provider.js";
 import { getVoiceProviderStatus } from "./ai/voice-provider.js";
 import { getEmbeddingProviderStatus } from "./ai/embedding-provider.js";
+import { startRequestTiming } from "./lib/request-timing.js";
 
 export const app = express();
 const env = getEnv();
@@ -40,6 +41,7 @@ const allowedOrigins = new Set([
 ]);
 
 app.disable("x-powered-by");
+app.use(startRequestTiming);
 app.use(helmet());
 app.use(
   cors({
@@ -67,6 +69,13 @@ app.get("/health", (_request, response) => {
     ai: getAIProviderStatus(),
     voice: getVoiceProviderStatus(),
     embeddings: getEmbeddingProviderStatus(),
+    deployment: {
+      render: process.env.RENDER === "true",
+      branch: process.env.RENDER_GIT_BRANCH ?? null,
+      commit: process.env.RENDER_GIT_COMMIT ?? null,
+      service: process.env.RENDER_SERVICE_NAME ?? null,
+      region: process.env.RENDER_REGION ?? null,
+    },
   });
 });
 

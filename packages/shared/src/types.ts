@@ -285,6 +285,22 @@ export interface AskSophiaResponse {
   sources: AskSophiaSource[];
   insufficientEvidence: boolean;
   confidence?: RetrievalConfidence;
+  debugTimings?: {
+    requestTotalMs: number;
+    stages: Array<{ name: string; durationMs: number }>;
+    retrieval?: {
+      totalMs: number;
+      dbRoundTrips: number;
+      externalCalls: number;
+      cacheHit: boolean;
+      exactLookup: boolean;
+      stages: Array<{ name: string; durationMs: number }>;
+    };
+    answerGeneration?: {
+      invoked: boolean;
+      durationMs: number;
+    };
+  };
 }
 
 export type SimulationDifficulty =

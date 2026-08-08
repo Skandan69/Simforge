@@ -47,6 +47,7 @@ export interface KnowledgeRetrievalResult {
   reason?: string;
   latencyMs: number;
   vectorAvailable: boolean;
+  debugTimings?: RetrievalDebugTimings;
 }
 
 export interface KnowledgeRetrievalInput {
@@ -57,6 +58,16 @@ export interface KnowledgeRetrievalInput {
   documentIds?: string[];
   limit?: number;
   maxEvidenceTokens?: number;
+  debugTimings?: boolean;
+}
+
+export interface RetrievalDebugTimings {
+  totalMs: number;
+  dbRoundTrips: number;
+  externalCalls: number;
+  cacheHit: boolean;
+  exactLookup: boolean;
+  stages: Array<{ name: string; durationMs: number }>;
 }
 
 const WORD_PATTERN = /[\p{L}\p{N}][\p{L}\p{N}-]{1,}/gu;
@@ -334,6 +345,23 @@ const EXACT_LOOKUP_CACHE_MAX_CHUNKS = 5_000;
 const exactLookupCache = new Map<string, { expiresAt: number; candidates: RetrievalCandidate[] }>();
 const exactLookupWarmups = new Set<string>();
 
+function retrievalNowMs() {
+  return performance.now();
+}
+
+async function timeRetrievalStage<T>(timings: RetrievalDebugTimings | null, name: string, operation: () => Promise<T>): Promise<T> {
+  const startedAt = retrievalNowMs();
+  try {
+    return await operation();
+  } finally {
+    if (timings) timings.stages.push({ name, durationMs: Math.round(retrievalNowMs() - startedAt) });
+  }
+}
+
+function recordRetrievalStage(timings: RetrievalDebugTimings | null, name: string, durationMs: number) {
+  timings?.stages.push({ name, durationMs: Math.round(durationMs) });
+}
+
 function scopedIdsKey(ids: string[] | null) {
   return ids?.length ? [...ids].sort().join(",") : "*";
 }
@@ -432,6 +460,14 @@ async function queryExactLookupCandidates(organizationId: string, query: string,
 export class KnowledgeRetrievalService {
   async retrieve(input: KnowledgeRetrievalInput): Promise<KnowledgeRetrievalResult> {
     const started = Date.now();
+    const debugTimings: RetrievalDebugTimings | null = input.debugTimings ? {
+      totalMs: 0,
+      dbRoundTrips: 0,
+      externalCalls: 0,
+      cacheHit: false,
+      exactLookup: false,
+      stages: [],
+    } : null;
     const limit = input.limit ?? 5;
     const candidateLimit = Math.max(50, limit * 10);
     const maxEvidenceTokens = input.maxEvidenceTokens ?? 2_500;
@@ -440,8 +476,10 @@ export class KnowledgeRetrievalService {
     const exactIdentifiers = identifierArray(input.query);
     const queryDocumentNumber = documentNumber(input.query);
     const exactLookup = exactIdentifiers.length > 0 || Boolean(queryDocumentNumber);
+    if (debugTimings) debugTimings.exactLookup = exactLookup;
     const effectiveCandidateLimit = exactLookup ? Math.max(10, limit * Math.max(1, exactIdentifiers.length) * 2) : candidateLimit;
     const cachedExactCandidates = exactLookup ? getCachedExactLookupCandidates(input.scope.organizationId, kbIds, docIds) : null;
+    if (debugTimings) debugTimings.cacheHit = Boolean(cachedExactCandidates);
     if (exactLookup && !cachedExactCandidates) {
       const warmup = setTimeout(() => {
         void warmExactLookupCandidates(input.scope.organizationId, kbIds, docIds).catch((error) => {
@@ -451,8 +489,18 @@ export class KnowledgeRetrievalService {
       warmup.unref?.();
     }
     const lexicalPromise = exactLookup ? (cachedExactCandidates
-      ? Promise.resolve(cachedExactCandidates.filter((candidate) => exactLookupMatches(candidate, input.query, exactIdentifiers)).slice(0, effectiveCandidateLimit))
-      : queryExactLookupCandidates(input.scope.organizationId, input.query, kbIds, docIds, exactIdentifiers, effectiveCandidateLimit)) : prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+      ? (async () => {
+        const startedAt = retrievalNowMs();
+        const candidates = cachedExactCandidates.filter((candidate) => exactLookupMatches(candidate, input.query, exactIdentifiers)).slice(0, effectiveCandidateLimit);
+        recordRetrievalStage(debugTimings, "retrieval.exactCacheFilter", retrievalNowMs() - startedAt);
+        return candidates;
+      })()
+      : timeRetrievalStage(debugTimings, "retrieval.exactLookupSql", async () => {
+        if (debugTimings) debugTimings.dbRoundTrips += 1;
+        return queryExactLookupCandidates(input.scope.organizationId, input.query, kbIds, docIds, exactIdentifiers, effectiveCandidateLimit);
+      })) : timeRetrievalStage(debugTimings, "retrieval.lexicalSql", async () => {
+      if (debugTimings) debugTimings.dbRoundTrips += 1;
+      return prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
       `SELECT kc."id" AS "chunkId", d."id" AS "documentId", d."fileName" AS "documentName",
         kb."id" AS "knowledgeBaseId", kb."name" AS "knowledgeBaseName",
         kc."documentVersion" AS "version", kc."sectionTitle", kc."headingPath",
@@ -487,6 +535,7 @@ export class KnowledgeRetrievalService {
       effectiveCandidateLimit,
       exactIdentifiers,
     );
+    });
 
     let vectorAvailable = false;
     let provider: ReturnType<typeof getEmbeddingProvider> = null;
@@ -501,10 +550,15 @@ export class KnowledgeRetrievalService {
 
     const vectorPromise = exactLookup || !provider ? Promise.resolve([] as RetrievalCandidate[]) : (async () => {
       try {
-        const [embedding] = await provider.embed([input.query]);
+        const [embedding] = await timeRetrievalStage(debugTimings, "retrieval.queryEmbedding", async () => {
+          if (debugTimings) debugTimings.externalCalls += 1;
+          return provider.embed([input.query]);
+        });
         if (embedding) {
           vectorAvailable = true;
-          const vectorRows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+          const vectorRows = await timeRetrievalStage(debugTimings, "retrieval.vectorSql", async () => {
+            if (debugTimings) debugTimings.dbRoundTrips += 1;
+            return prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
             `SELECT kc."id" AS "chunkId", d."id" AS "documentId", d."fileName" AS "documentName",
               kb."id" AS "knowledgeBaseId", kb."name" AS "knowledgeBaseName",
               kc."documentVersion" AS "version", kc."sectionTitle", kc."headingPath",
@@ -539,6 +593,7 @@ export class KnowledgeRetrievalService {
             provider.model,
             provider.dimensions,
           );
+          });
           return mapRows(vectorRows);
         }
       } catch (error) {
@@ -547,19 +602,29 @@ export class KnowledgeRetrievalService {
       return [] as RetrievalCandidate[];
     })();
 
-    const [lexicalResult, vector] = await Promise.all([lexicalPromise, vectorPromise]);
+    const [lexicalResult, vector] = await timeRetrievalStage(debugTimings, "retrieval.parallelFetch", () => Promise.all([lexicalPromise, vectorPromise]));
     const lexical = exactLookup ? lexicalResult as RetrievalCandidate[] : mapRows(lexicalResult as Array<Record<string, unknown>>);
 
-    const evidence = selectEvidence(reciprocalRankFusion(lexical, vector), input.query, limit, maxEvidenceTokens);
+    const fusionStarted = retrievalNowMs();
+    const fused = reciprocalRankFusion(lexical, vector);
+    recordRetrievalStage(debugTimings, "retrieval.rrfFusion", retrievalNowMs() - fusionStarted);
+    const evidenceStarted = retrievalNowMs();
+    const evidence = selectEvidence(fused, input.query, limit, maxEvidenceTokens);
+    recordRetrievalStage(debugTimings, "retrieval.evidenceSelection", retrievalNowMs() - evidenceStarted);
+    const confidenceStarted = retrievalNowMs();
     const confidence = calculateConfidence(evidence);
+    recordRetrievalStage(debugTimings, "retrieval.confidence", retrievalNowMs() - confidenceStarted);
+    const latencyMs = Date.now() - started;
+    if (debugTimings) debugTimings.totalMs = latencyMs;
     return {
       query: input.query,
       evidence,
       confidence,
       insufficientEvidence: !evidence.length || confidence === "LOW",
       reason: evidence.length ? undefined : "NO_RELEVANT_EVIDENCE",
-      latencyMs: Date.now() - started,
+      latencyMs,
       vectorAvailable,
+      debugTimings: debugTimings ?? undefined,
     };
   }
 }

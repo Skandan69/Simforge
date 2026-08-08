@@ -2,6 +2,7 @@ import type { Request, RequestHandler } from "express";
 import type { UserRole } from "@simforge/shared";
 import type { AuthenticatedRequest } from "./auth.js";
 import { prisma } from "../lib/prisma.js";
+import { timeRequestStage } from "../lib/request-timing.js";
 
 export interface WorkspaceRequest extends AuthenticatedRequest {
   workspace: {
@@ -20,10 +21,10 @@ export const requireWorkspace: RequestHandler = async (
   next,
 ) => {
   const user = (request as AuthenticatedRequest).authUser;
-  const membership = await prisma.membership.findFirst({
+  const membership = await timeRequestStage(request, "workspace.resolve", () => prisma.membership.findFirst({
     where: { userId: user.id },
     orderBy: { joinedAt: "asc" },
-  });
+  }));
 
   if (!membership) {
     response

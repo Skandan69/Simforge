@@ -31,7 +31,7 @@ after(
 test("health endpoint reports the API service", async () => {
   const response = await fetch(`${baseUrl}/health`);
   assert.equal(response.status, 200);
-  const body = await response.json() as { status: string; service: string; ai: { provider: string; configured: boolean; reason: string }; voice: { sttConfigured: boolean; ttsConfigured: boolean; ttsVoice: string }; embeddings: { provider: string; configured: boolean; model: string; dimensions: number; indexDimensions: number; dimensionMatches: boolean } };
+  const body = await response.json() as { status: string; service: string; ai: { provider: string; configured: boolean; reason: string }; voice: { sttConfigured: boolean; ttsConfigured: boolean; ttsVoice: string }; embeddings: { provider: string; configured: boolean; model: string; dimensions: number; indexDimensions: number; dimensionMatches: boolean }; deployment: { render: boolean; branch: string | null; commit: string | null; service: string | null; region: string | null } };
   assert.equal(body.status, "ok");
   assert.equal(body.service, "simforge-api");
   assert.equal(body.ai.configured, body.ai.provider === "openai");
@@ -42,6 +42,7 @@ test("health endpoint reports the API service", async () => {
   assert.equal(body.embeddings.dimensions, 1536);
   assert.equal(body.embeddings.indexDimensions, 1536);
   assert.equal(body.embeddings.dimensionMatches, true);
+  assert.equal(typeof body.deployment.render, "boolean");
   assert.equal(JSON.stringify(body).includes("OPENAI_API_KEY"), false);
 });
 
