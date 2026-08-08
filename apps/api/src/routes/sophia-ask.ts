@@ -10,6 +10,7 @@ import { prisma } from "../lib/prisma.js";
 import { HttpError } from "../lib/http-error.js";
 import { debugTimingsRequested, nowMs, requestTimingSummary, timeRequestStage } from "../lib/request-timing.js";
 import { TtlCache } from "../lib/ttl-cache.js";
+import { insufficientEvidenceAskResponse } from "./sophia-ask-response.js";
 
 const askSchema = z.object({
   question: z.string().trim().min(1).max(4000),
@@ -50,14 +51,10 @@ sophiaAskRouter.post("/ask", async (request, response) => {
   } : undefined;
 
   if (retrieval.insufficientEvidence) {
-    const payload: AskSophiaResponse = {
-      mode: "ASK",
-      answer: "I couldn't find sufficient information in your organization's knowledge to answer that confidently.",
-      sources: retrieval.evidence.map(toAskSource),
-      insufficientEvidence: true,
-      confidence: retrieval.confidence,
-      debugTimings: makeDebugTimings({ invoked: false, durationMs: 0 }),
-    };
+    const payload: AskSophiaResponse = insufficientEvidenceAskResponse(
+      retrieval,
+      makeDebugTimings({ invoked: false, durationMs: 0 }),
+    );
     response.json(payload);
     return;
   }
