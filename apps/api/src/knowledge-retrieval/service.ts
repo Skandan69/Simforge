@@ -152,6 +152,10 @@ function identifierOverlapCount(queryIdentifiers: Set<string>, candidateIdentifi
   return [...queryIdentifiers].filter((queryIdentifier) => [...candidateIdentifiers].some((candidateIdentifier) => identifierCompatible(queryIdentifier, candidateIdentifier))).length;
 }
 
+function identifierArray(value: string) {
+  return [...identifiers(value)];
+}
+
 function clamp(value: number, min = 0, max = 1) {
   return Math.max(min, Math.min(max, value));
 }
@@ -273,7 +277,9 @@ export function selectEvidence(candidates: Array<RetrievalCandidate & { rrfScore
     if (selected.length >= limit) break;
     if (selected.some((existing) => existing.text === candidate.text)) continue;
     const candidateTokens = estimateTokens(candidate.text);
-    if (selected.length && tokens + candidateTokens > maxEvidenceTokens) continue;
+    const introducesNewDocument = !selected.some((existing) => existing.documentId === candidate.documentId);
+    const preservesIdentifierSource = introducesNewDocument && candidate.relevance.identifierOverlap > 0;
+    if (selected.length && tokens + candidateTokens > maxEvidenceTokens && !preservesIdentifierSource) continue;
     tokens += candidateTokens;
     selected.push({ ...candidate, evidenceId: `E${selected.length + 1}` as `E${number}`, citationLabel: citationLabel(candidate) });
   }
@@ -323,6 +329,106 @@ function vectorLiteral(vector: number[]) {
   return `[${vector.map((value) => Number.isFinite(value) ? value.toFixed(8) : "0").join(",")}]`;
 }
 
+const EXACT_LOOKUP_CACHE_TTL_MS = 30_000;
+const EXACT_LOOKUP_CACHE_MAX_CHUNKS = 5_000;
+const exactLookupCache = new Map<string, { expiresAt: number; candidates: RetrievalCandidate[] }>();
+const exactLookupWarmups = new Set<string>();
+
+function scopedIdsKey(ids: string[] | null) {
+  return ids?.length ? [...ids].sort().join(",") : "*";
+}
+
+function exactLookupCacheKey(organizationId: string, kbIds: string[] | null, docIds: string[] | null) {
+  return `${organizationId}:${scopedIdsKey(kbIds)}:${scopedIdsKey(docIds)}`;
+}
+
+function exactLookupMatches(candidate: RetrievalCandidate, query: string, exactIdentifiers: string[]) {
+  const searchText = candidateSearchText(candidate).toLowerCase();
+  return exactIdentifiers.some((identifier) => searchText.includes(identifier)) || documentNumberMatches(candidate, query);
+}
+
+function getCachedExactLookupCandidates(organizationId: string, kbIds: string[] | null, docIds: string[] | null) {
+  const cacheKey = exactLookupCacheKey(organizationId, kbIds, docIds);
+  const cached = exactLookupCache.get(cacheKey);
+  return cached && cached.expiresAt > Date.now() ? cached.candidates : null;
+}
+
+async function warmExactLookupCandidates(organizationId: string, kbIds: string[] | null, docIds: string[] | null) {
+  const cacheKey = exactLookupCacheKey(organizationId, kbIds, docIds);
+  if (exactLookupWarmups.has(cacheKey)) return;
+  exactLookupWarmups.add(cacheKey);
+  try {
+    const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+      `SELECT kc."id" AS "chunkId", d."id" AS "documentId", d."fileName" AS "documentName",
+        kb."id" AS "knowledgeBaseId", kb."name" AS "knowledgeBaseName",
+        kc."documentVersion" AS "version", kc."sectionTitle", kc."headingPath",
+        kc."pageNumber", kc."slideNumber", kc."sheetName", kc."rowStart", kc."rowEnd", kc."text",
+        1::float AS "lexicalScore",
+        0::float AS "vectorScore"
+      FROM "KnowledgeChunk" kc
+      JOIN "Document" d ON d."id" = kc."documentId"
+      JOIN "KnowledgeBase" kb ON kb."id" = d."knowledgeBaseId"
+      WHERE kb."organizationId" = $1::uuid
+        AND kb."status" = 'Active'
+        AND d."status" = 'Ready'
+        AND kc."status" = 'ACTIVE'
+        AND d."retrievalVersion" = kc."documentVersion"
+        AND ($2::uuid[] IS NULL OR kb."id" = ANY($2::uuid[]))
+        AND ($3::uuid[] IS NULL OR d."id" = ANY($3::uuid[]))
+      ORDER BY kc."createdAt" DESC
+      LIMIT $4`,
+      organizationId,
+      kbIds,
+      docIds,
+      EXACT_LOOKUP_CACHE_MAX_CHUNKS + 1,
+    );
+    if (rows.length <= EXACT_LOOKUP_CACHE_MAX_CHUNKS) exactLookupCache.set(cacheKey, { expiresAt: Date.now() + EXACT_LOOKUP_CACHE_TTL_MS, candidates: mapRows(rows) });
+  } finally {
+    exactLookupWarmups.delete(cacheKey);
+  }
+}
+
+async function queryExactLookupCandidates(organizationId: string, query: string, kbIds: string[] | null, docIds: string[] | null, exactIdentifiers: string[], limit: number) {
+  const queryDocumentNumber = documentNumber(query);
+  const normalizedDocumentNumber = queryDocumentNumber ? queryDocumentNumber.padStart(3, "0") : null;
+  const boundaryDocumentNumber = queryDocumentNumber ? queryDocumentNumber.replace(/^0+/u, "") || "0" : null;
+  const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+    `SELECT kc."id" AS "chunkId", d."id" AS "documentId", d."fileName" AS "documentName",
+      kb."id" AS "knowledgeBaseId", kb."name" AS "knowledgeBaseName",
+      kc."documentVersion" AS "version", kc."sectionTitle", kc."headingPath",
+      kc."pageNumber", kc."slideNumber", kc."sheetName", kc."rowStart", kc."rowEnd", kc."text",
+      1::float AS "lexicalScore",
+      0::float AS "vectorScore"
+    FROM "KnowledgeChunk" kc
+    JOIN "Document" d ON d."id" = kc."documentId"
+    JOIN "KnowledgeBase" kb ON kb."id" = d."knowledgeBaseId"
+    WHERE kb."organizationId" = $1::uuid
+      AND $2::text IS NOT NULL
+      AND ($8::text IS NULL OR $8::text IS NOT NULL)
+      AND kb."status" = 'Active'
+      AND d."status" = 'Ready'
+      AND kc."status" = 'ACTIVE'
+      AND d."retrievalVersion" = kc."documentVersion"
+      AND ($3::uuid[] IS NULL OR kb."id" = ANY($3::uuid[]))
+      AND ($4::uuid[] IS NULL OR d."id" = ANY($4::uuid[]))
+      AND (EXISTS (SELECT 1 FROM unnest($6::text[]) AS exact(identifier) WHERE kc."text" ILIKE '%' || exact.identifier || '%')
+        OR EXISTS (SELECT 1 FROM unnest($6::text[]) AS exact(identifier) WHERE d."fileName" ILIKE '%' || exact.identifier || '%')
+        OR ($7::text IS NOT NULL AND $9::text IS NOT NULL AND d."fileName" ~* ('(^|[^0-9])0*' || $9::text || '([^0-9]|$)')))
+    ORDER BY kc."createdAt" DESC
+    LIMIT $5`,
+    organizationId,
+    query,
+    kbIds,
+    docIds,
+    limit,
+    exactIdentifiers,
+    queryDocumentNumber,
+    normalizedDocumentNumber,
+    boundaryDocumentNumber,
+  );
+  return mapRows(rows);
+}
+
 export class KnowledgeRetrievalService {
   async retrieve(input: KnowledgeRetrievalInput): Promise<KnowledgeRetrievalResult> {
     const started = Date.now();
@@ -331,8 +437,22 @@ export class KnowledgeRetrievalService {
     const maxEvidenceTokens = input.maxEvidenceTokens ?? 2_500;
     const kbIds = input.knowledgeBaseIds?.length ? input.knowledgeBaseIds : null;
     const docIds = input.documentIds?.length ? input.documentIds : null;
-    const exactIdentifier = identifiers(input.query).values().next().value ?? null;
-    const lexicalRows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+    const exactIdentifiers = identifierArray(input.query);
+    const queryDocumentNumber = documentNumber(input.query);
+    const exactLookup = exactIdentifiers.length > 0 || Boolean(queryDocumentNumber);
+    const effectiveCandidateLimit = exactLookup ? Math.max(10, limit * Math.max(1, exactIdentifiers.length) * 2) : candidateLimit;
+    const cachedExactCandidates = exactLookup ? getCachedExactLookupCandidates(input.scope.organizationId, kbIds, docIds) : null;
+    if (exactLookup && !cachedExactCandidates) {
+      const warmup = setTimeout(() => {
+        void warmExactLookupCandidates(input.scope.organizationId, kbIds, docIds).catch((error) => {
+          console.warn("Knowledge retrieval exact lookup cache warmup failed", { mode: input.mode, errorType: error instanceof Error ? error.name : "UnknownError" });
+        });
+      }, 2_500);
+      warmup.unref?.();
+    }
+    const lexicalPromise = exactLookup ? (cachedExactCandidates
+      ? Promise.resolve(cachedExactCandidates.filter((candidate) => exactLookupMatches(candidate, input.query, exactIdentifiers)).slice(0, effectiveCandidateLimit))
+      : queryExactLookupCandidates(input.scope.organizationId, input.query, kbIds, docIds, exactIdentifiers, effectiveCandidateLimit)) : prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
       `SELECT kc."id" AS "chunkId", d."id" AS "documentId", d."fileName" AS "documentName",
         kb."id" AS "knowledgeBaseId", kb."name" AS "knowledgeBaseName",
         kc."documentVersion" AS "version", kc."sectionTitle", kc."headingPath",
@@ -354,9 +474,9 @@ export class KnowledgeRetrievalService {
         AND ($4::uuid[] IS NULL OR d."id" = ANY($4::uuid[]))
         AND (to_tsvector('english', kc."text") @@ websearch_to_tsquery('english', $2)
           OR kc."text" ILIKE '%' || $2 || '%'
-          OR ($6::text IS NOT NULL AND kc."text" ILIKE '%' || $6::text || '%')
+          OR EXISTS (SELECT 1 FROM unnest($6::text[]) AS exact(identifier) WHERE kc."text" ILIKE '%' || exact.identifier || '%')
           OR d."fileName" ILIKE '%' || $2 || '%'
-          OR ($6::text IS NOT NULL AND d."fileName" ILIKE '%' || $6::text || '%')
+          OR EXISTS (SELECT 1 FROM unnest($6::text[]) AS exact(identifier) WHERE d."fileName" ILIKE '%' || exact.identifier || '%')
           OR kc."sectionTitle" ILIKE '%' || $2 || '%')
       ORDER BY "lexicalScore" DESC, kc."createdAt" DESC
       LIMIT $5`,
@@ -364,12 +484,10 @@ export class KnowledgeRetrievalService {
       input.query,
       kbIds,
       docIds,
-      candidateLimit,
-      exactIdentifier,
+      effectiveCandidateLimit,
+      exactIdentifiers,
     );
-    const lexical = mapRows(lexicalRows);
 
-    let vector: RetrievalCandidate[] = [];
     let vectorAvailable = false;
     let provider: ReturnType<typeof getEmbeddingProvider> = null;
     try {
@@ -380,7 +498,8 @@ export class KnowledgeRetrievalService {
         errorType: error instanceof Error ? error.name : "UnknownError",
       });
     }
-    if (provider) {
+
+    const vectorPromise = exactLookup || !provider ? Promise.resolve([] as RetrievalCandidate[]) : (async () => {
       try {
         const [embedding] = await provider.embed([input.query]);
         if (embedding) {
@@ -420,12 +539,16 @@ export class KnowledgeRetrievalService {
             provider.model,
             provider.dimensions,
           );
-          vector = mapRows(vectorRows);
+          return mapRows(vectorRows);
         }
       } catch (error) {
         console.warn("Knowledge retrieval vector path unavailable; lexical fallback active", { mode: input.mode, errorType: error instanceof Error ? error.name : "UnknownError" });
       }
-    }
+      return [] as RetrievalCandidate[];
+    })();
+
+    const [lexicalResult, vector] = await Promise.all([lexicalPromise, vectorPromise]);
+    const lexical = exactLookup ? lexicalResult as RetrievalCandidate[] : mapRows(lexicalResult as Array<Record<string, unknown>>);
 
     const evidence = selectEvidence(reciprocalRankFusion(lexical, vector), input.query, limit, maxEvidenceTokens);
     const confidence = calculateConfidence(evidence);

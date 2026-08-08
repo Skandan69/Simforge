@@ -6,6 +6,7 @@ const envSchema = z.object({
     .default("development"),
   PORT: z.coerce.number().int().positive().default(4000),
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
+  DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(50).default(20),
   SUPABASE_URL: z.url("SUPABASE_URL must be a valid URL"),
   SUPABASE_PUBLISHABLE_KEY: z
     .string()

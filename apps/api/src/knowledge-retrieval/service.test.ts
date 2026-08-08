@@ -97,6 +97,26 @@ test("exact identifier evidence survives no-answer filtering", () => {
   assert.notEqual(calculateConfidence(evidence), "LOW");
 });
 
+test("multiple independently relevant identifiers preserve multiple evidence sources", () => {
+  const fused = reciprocalRankFusion([
+    candidate("c1", "Cross document control CROSS-DOC-401 says verify the customer's account before escalation."),
+    { ...candidate("c2", "Cross document control CROSS-DOC-402 says document the refund exception before escalation."), documentId: "document-b", documentName: "Escalation Policy" },
+  ], []);
+  const evidence = selectEvidence(fused, "Compare CROSS-DOC-401 and CROSS-DOC-402.", 5, 1000);
+  assert.deepEqual(evidence.map((item) => item.chunkId), ["c1", "c2"]);
+  assert.notEqual(calculateConfidence(evidence), "LOW");
+});
+
+test("multi-source identifier evidence is preserved even when the second source exceeds the evidence token budget", () => {
+  const longSource = `${"Detailed policy evidence. ".repeat(120)} CROSS-DOC-402 requires escalation notes.`;
+  const fused = reciprocalRankFusion([
+    candidate("c1", `${"Detailed policy evidence. ".repeat(120)} CROSS-DOC-401 requires identity verification.`),
+    { ...candidate("c2", longSource), documentId: "document-b", documentName: "Escalation Policy" },
+  ], []);
+  const evidence = selectEvidence(fused, "Compare CROSS-DOC-401 and CROSS-DOC-402.", 5, 600);
+  assert.deepEqual(evidence.map((item) => item.chunkId), ["c1", "c2"]);
+});
+
 test("structured identifier prefixes can retrieve active version lifecycle evidence", () => {
   const fused = reciprocalRankFusion([
     candidate("c1", "Version lifecycle active value PHASE-A-123-VERSION-V2: refund period is 14 days."),
