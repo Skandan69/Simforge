@@ -520,12 +520,7 @@ export class KnowledgeRetrievalService {
         AND d."retrievalVersion" = kc."documentVersion"
         AND ($3::uuid[] IS NULL OR kb."id" = ANY($3::uuid[]))
         AND ($4::uuid[] IS NULL OR d."id" = ANY($4::uuid[]))
-        AND (to_tsvector('english', kc."text") @@ websearch_to_tsquery('english', $2)
-          OR kc."text" ILIKE '%' || $2 || '%'
-          OR EXISTS (SELECT 1 FROM unnest($6::text[]) AS exact(identifier) WHERE kc."text" ILIKE '%' || exact.identifier || '%')
-          OR d."fileName" ILIKE '%' || $2 || '%'
-          OR EXISTS (SELECT 1 FROM unnest($6::text[]) AS exact(identifier) WHERE d."fileName" ILIKE '%' || exact.identifier || '%')
-          OR kc."sectionTitle" ILIKE '%' || $2 || '%')
+        AND to_tsvector('english', kc."text") @@ websearch_to_tsquery('english', $2)
       ORDER BY "lexicalScore" DESC, kc."createdAt" DESC
       LIMIT $5`,
       input.scope.organizationId,
