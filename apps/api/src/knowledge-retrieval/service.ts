@@ -505,7 +505,7 @@ export class KnowledgeRetrievalService {
         kb."id" AS "knowledgeBaseId", kb."name" AS "knowledgeBaseName",
         kc."documentVersion" AS "version", kc."sectionTitle", kc."headingPath",
         kc."pageNumber", kc."slideNumber", kc."sheetName", kc."rowStart", kc."rowEnd", kc."text",
-        ts_rank_cd(to_tsvector('english', kc."text"), websearch_to_tsquery('english', $2)) AS "lexicalScore",
+        1::float AS "lexicalScore",
         0::float AS "vectorScore"
       FROM "KnowledgeChunk" kc
       JOIN "KnowledgeSource" ks ON ks."id" = kc."sourceId"
@@ -521,7 +521,7 @@ export class KnowledgeRetrievalService {
         AND ($3::uuid[] IS NULL OR kb."id" = ANY($3::uuid[]))
         AND ($4::uuid[] IS NULL OR d."id" = ANY($4::uuid[]))
         AND to_tsvector('english', kc."text") @@ websearch_to_tsquery('english', $2)
-      ORDER BY "lexicalScore" DESC, kc."createdAt" DESC
+      ORDER BY kc."createdAt" DESC
       LIMIT $5`,
       input.scope.organizationId,
       input.query,
