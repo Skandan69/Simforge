@@ -43,9 +43,11 @@ type VoiceState = "Ready" | "Listening" | "Uploading" | "Transcribing" | "Thinki
 export function SophiaSimulationRun({
   simulationId,
   autoStart = false,
+  assignmentId,
 }: {
   simulationId: string;
   autoStart?: boolean;
+  assignmentId?: string;
 }) {
   const router = useRouter();
   const { communicationIntelligenceVisible, setCommunicationIntelligenceVisible } = useCommunicationIntelligence();
@@ -123,7 +125,7 @@ export function SophiaSimulationRun({
     try {
       const created = await apiFetch<SimulationSessionResponse>(
         "/api/simulation-sessions",
-        { method: "POST", body: JSON.stringify({ simulationId }) },
+        { method: "POST", body: JSON.stringify({ simulationId, assignmentId }) },
       );
       setSession(created);
       setConfiguration(created.simulation);
@@ -138,7 +140,7 @@ export function SophiaSimulationRun({
     } finally {
       setStarting(false);
     }
-  }, [simulationId]);
+  }, [assignmentId, simulationId]);
   useEffect(() => {
     if (!autoStart || !configuration || session || autoStartHandled.current)
       return;

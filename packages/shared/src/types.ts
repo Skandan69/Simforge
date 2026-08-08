@@ -379,6 +379,7 @@ export interface SimulationDashboardResponse {
 }
 
 export type SimulationSessionStatus = "IN_PROGRESS" | "COMPLETED" | "FAILED";
+export type PracticeAssignmentStatus = "ASSIGNED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
 export type SimulationMessageRole = "learner" | "ai" | "system";
 export type WorkforceCapability =
   (typeof import("./constants.js").WORKFORCE_CAPABILITIES)[number];
@@ -523,4 +524,154 @@ export interface SimulationCoachingInsightResponse {
   generatedBy: CoachingGeneratedBy;
   createdAt: string;
   updatedAt: string;
+}
+
+export type ManagerFollowUpStatus = "Needs Practice" | "Needs Review" | "Improving" | "Strong Performer" | "Not Enough Data";
+
+export interface ManagerCapabilitySummary {
+  capabilityName: WorkforceCapability;
+  averageScore: number | null;
+  previousAverageScore: number | null;
+  change: number | null;
+  assessmentCount: number;
+  learnerCount: number;
+}
+
+export interface ManagerLearnerCapability {
+  capabilityName: WorkforceCapability;
+  currentScore: number | null;
+  previousScore: number | null;
+  change: number | null;
+  assessmentCount: number;
+  lastAssessedAt: string | null;
+}
+
+export interface ManagerLearnerSummary {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  overallScore: number | null;
+  previousOverallScore: number | null;
+  trend: CapabilityTrend | "NOT_ENOUGH_DATA";
+  confidence: CapabilityConfidence | "NONE";
+  simulationCount: number;
+  completedSimulationCount: number;
+  lastAssessedAt: string | null;
+  strongestCapabilities: WorkforceCapability[];
+  weakestCapabilities: WorkforceCapability[];
+  followUpStatus: ManagerFollowUpStatus;
+  followUpReason: string;
+  recommendedFocusCapability: WorkforceCapability | null;
+  openAssignmentCount: number;
+}
+
+export interface ManagerRecentSimulation {
+  id: string;
+  learnerId: string;
+  learnerName: string;
+  simulationId: string;
+  simulationTitle: string;
+  status: SimulationSessionStatus;
+  overallScore: number | null;
+  startedAt: string;
+  completedAt: string | null;
+}
+
+export interface PracticeRecommendation {
+  learnerId: string;
+  learnerName: string;
+  capability: WorkforceCapability | null;
+  simulationId: string | null;
+  simulationTitle: string | null;
+  reason: string;
+  evidence: string;
+}
+
+export interface PracticeAssignmentResponse {
+  id: string;
+  learner: { id: string; name: string; email: string };
+  simulation: { id: string; title: string; status: SimulationStatus };
+  assignedBy: { id: string; name: string; email: string };
+  sessionId: string | null;
+  status: PracticeAssignmentStatus;
+  reason: string;
+  focusCapability: WorkforceCapability | null;
+  assignedAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  cancelledAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreatePracticeAssignmentInput {
+  learnerId: string;
+  simulationId: string;
+  reason?: string;
+  focusCapability?: WorkforceCapability | null;
+}
+
+export interface UpdatePracticeAssignmentInput {
+  status: Extract<PracticeAssignmentStatus, "CANCELLED">;
+}
+
+export interface ManagerIntelligenceOverviewResponse {
+  canManageAssignments: boolean;
+  organization: OrganizationSummary;
+  totals: {
+    learners: number;
+    completedSimulations: number;
+    inProgressSimulations: number;
+    openAssignments: number;
+    completedAssignments: number;
+    averageCapabilityScore: number | null;
+  };
+  capabilityOverview: ManagerCapabilitySummary[];
+  learnersNeedingAttention: ManagerLearnerSummary[];
+  recentSimulations: ManagerRecentSimulation[];
+  recentCoachingInsights: Array<{
+    id: string;
+    sessionId: string;
+    learnerId: string;
+    learnerName: string;
+    summary: string;
+    nextBestAction: { title: string; description: string; capability: WorkforceCapability };
+    createdAt: string;
+  }>;
+  recommendations: PracticeRecommendation[];
+}
+
+export interface ManagerLearnerListResponse {
+  learners: ManagerLearnerSummary[];
+}
+
+export interface ManagerLearnerDetailResponse {
+  learner: ManagerLearnerSummary & { capabilities: ManagerLearnerCapability[] };
+  recentSimulations: ManagerRecentSimulation[];
+  capabilityHistory: Array<{
+    sessionId: string;
+    capabilityName: WorkforceCapability;
+    currentScore: number;
+    previousScore: number | null;
+    change: number;
+    assessedAt: string;
+    simulationTitle: string;
+  }>;
+  coachingInsights: Array<{
+    id: string;
+    sessionId: string;
+    summary: string;
+    strengths: SimulationCoachingInsightResponse["strengths"];
+    improvementAreas: SimulationCoachingInsightResponse["improvementAreas"];
+    nextBestAction: SimulationCoachingInsightResponse["nextBestAction"];
+    createdAt: string;
+  }>;
+  assignments: PracticeAssignmentResponse[];
+  recommendations: PracticeRecommendation[];
+}
+
+export interface PracticeAssignmentListResponse {
+  canManageAssignments: boolean;
+  assignments: PracticeAssignmentResponse[];
 }

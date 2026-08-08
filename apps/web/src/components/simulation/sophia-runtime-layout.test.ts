@@ -26,6 +26,11 @@ test("runtime derives live coaching from persisted learner turns", () => {
   assert.match(source, /communicationIndicators=\{liveIntelligence\.communication\}/u);
 });
 
+test("runtime can start from a targeted practice assignment", () => {
+  assert.match(source, /assignmentId/u);
+  assert.match(source, /JSON\.stringify\(\{ simulationId, assignmentId \}\)/u);
+});
+
 test("finishing evaluates before navigating and leaves coaching to the report", () => {
   const evaluateStart = source.indexOf("async function evaluate()");
   const renderStart = source.indexOf("if (loading)", evaluateStart);
