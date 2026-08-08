@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildDeterministicCoaching, canReadCoaching, coachingIdentity, coachingReadiness, coachingScope, generateCoachingWithFallback, type CoachingInput } from "./ai-coach.js";
+import { buildDeterministicCoaching, canReadCoaching, coachingIdentity, coachingReadiness, coachingScope, generateCoachingWithFallback, simulationSessionCoachingScope, type CoachingInput } from "./ai-coach.js";
 
 const capabilities = ["Communication", "Product Knowledge", "Policy Compliance", "Empathy", "Problem Solving", "Decision Making"] as const;
 const input: CoachingInput = {
@@ -39,6 +39,7 @@ test("unavailable AI generation falls back deterministically", async () => {
 
 test("coaching scope preserves tenant isolation", () => {
   assert.deepEqual(coachingScope("session-a", "org-a"), { sessionId: "session-a", organizationId: "org-a" });
+  assert.deepEqual(simulationSessionCoachingScope("session-a", "org-a"), { id: "session-a", organizationId: "org-a" });
 });
 
 test("coaching requires evaluation and uses one stable session identity", () => {
