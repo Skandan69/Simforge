@@ -117,6 +117,16 @@ export async function runLegacyEmbeddingBackfill(organizationId: string, options
     text: chunk.text,
     contentHash: canonicalChunkHash(chunk),
   }));
+  const diagnostics = {
+    selection: {
+      diagnosedChunkIds: SPRINT19_LEGACY_EMBEDDING_CHUNK_IDS.length,
+      found: selection.chunks.length,
+      eligible: selection.eligible.length,
+      skipped: selection.skipped.length,
+    },
+    contentHashUpdates: { attempted: 0, updated: 0 },
+    embeddings: { attempted: 0, embedded: 0, skipped: 0 },
+  };
 
   if (options.dryRun || !embeddable.length) {
     return {
@@ -128,19 +138,29 @@ export async function runLegacyEmbeddingBackfill(organizationId: string, options
       attempted: 0,
       embedded: 0,
       providerConfigured: null,
+      diagnostics,
     };
   }
 
-  await prisma.$transaction(
-    selection.eligible.map((chunk) =>
-      prisma.knowledgeChunk.update({
-        where: { id: chunk.id },
-        data: { contentHash: canonicalChunkHash(chunk) },
-      }),
-    ),
-  );
+  for (const chunk of selection.eligible) {
+    const hash = canonicalChunkHash(chunk);
+    diagnostics.contentHashUpdates.attempted += 1;
+    const result = await prisma.knowledgeChunk.updateMany({
+      where: {
+        id: chunk.id,
+        OR: [{ contentHash: null }, { contentHash: { not: hash } }],
+      },
+      data: { contentHash: hash },
+    });
+    diagnostics.contentHashUpdates.updated += result.count;
+  }
 
   const result = await embedKnowledgeChunks(embeddable);
+  diagnostics.embeddings = {
+    attempted: result.attempted,
+    embedded: result.embedded,
+    skipped: result.skipped,
+  };
   return {
     dryRun: false,
     diagnosedChunkIds: SPRINT19_LEGACY_EMBEDDING_CHUNK_IDS.length,
@@ -150,5 +170,6 @@ export async function runLegacyEmbeddingBackfill(organizationId: string, options
     attempted: result.attempted,
     embedded: result.embedded,
     providerConfigured: result.providerConfigured,
+    diagnostics,
   };
 }

@@ -43,6 +43,14 @@ test("legacy embedding repair is scoped to the diagnosed chunk ids", () => {
   assert.equal(isEligibleLegacyEmbeddingChunk(chunk({ id: "00000000-0000-0000-0000-000000000000" }), "org-1"), false);
 });
 
+test("legacy embedding repair eligibility scales across the full production-sized allowlist", () => {
+  const eligible = SPRINT19_LEGACY_EMBEDDING_CHUNK_IDS.map((id, index) =>
+    chunk({ id, chunkNumber: index + 1, text: `Legacy active production knowledge ${index + 1}.` }),
+  ).filter((record) => isEligibleLegacyEmbeddingChunk(record, "org-1"));
+
+  assert.equal(eligible.length, 31);
+});
+
 test("legacy embedding repair requires active lifecycle alignment", () => {
   assert.equal(isEligibleLegacyEmbeddingChunk(chunk({ document: { ...chunk().document!, retrievalVersion: 2 } }), "org-1"), false);
   assert.equal(isEligibleLegacyEmbeddingChunk(chunk({ document: { ...chunk().document!, status: "Archived" } }), "org-1"), false);
