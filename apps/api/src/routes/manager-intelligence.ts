@@ -72,6 +72,7 @@ async function buildManagerSnapshot(organizationId: string) {
     sessions,
     recentSessions,
     assignments,
+    assessmentAssignments,
     recentCoachingInsights,
     simulations,
   ] = await Promise.all([
@@ -106,6 +107,10 @@ async function buildManagerSnapshot(organizationId: string) {
         assigner: { select: { id: true, email: true, fullName: true } },
         simulation: { select: { id: true, title: true, status: true } },
       },
+    }),
+    prisma.assessmentAssignment.findMany({
+      where: { organizationId },
+      select: { id: true, status: true, attempt: { select: { passed: true } } },
     }),
     prisma.simulationCoachingInsight.findMany({
       where: { organizationId },
@@ -179,6 +184,9 @@ async function buildManagerSnapshot(organizationId: string) {
   const inProgressSimulations = sessions.filter((session) => session.status === "IN_PROGRESS").length;
   const completedAssignments = assignments.filter((assignment) => assignment.status === "COMPLETED").length;
   const openAssignments = assignments.filter((assignment) => assignment.status === "ASSIGNED" || assignment.status === "IN_PROGRESS").length;
+  const completedAssessments = assessmentAssignments.filter((assignment) => assignment.status === "COMPLETED").length;
+  const openAssessments = assessmentAssignments.filter((assignment) => assignment.status === "ASSIGNED" || assignment.status === "IN_PROGRESS").length;
+  const passedAssessments = assessmentAssignments.filter((assignment) => assignment.attempt?.passed === true).length;
   const assessedScores = learners.map((learner) => learner.overallScore).filter((score): score is number => score !== null);
 
   return {
@@ -206,6 +214,9 @@ async function buildManagerSnapshot(organizationId: string) {
       inProgressSimulations,
       openAssignments,
       completedAssignments,
+      openAssessments,
+      completedAssessments,
+      passedAssessments,
       averageCapabilityScore: assessedScores.length
         ? Math.round(assessedScores.reduce((total, score) => total + score, 0) / assessedScores.length)
         : null,

@@ -1,2 +1,5 @@
-import { ModulePlaceholder } from "@/components/modules/module-placeholder";
-export default function Page() { return <ModulePlaceholder title="Assessments" description="Measure learner readiness and outcomes once the assessment workflow is defined." />; }
+import { AssessmentStudioView } from "@/components/assessments/assessment-studio-view";
+
+export default function Page() {
+  return <AssessmentStudioView />;
+}

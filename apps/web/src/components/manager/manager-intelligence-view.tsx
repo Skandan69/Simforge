@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, BrainCircuit, CheckCircle2, ClipboardList, Loader2, RefreshCw, Sparkles, Target, Users } from "lucide-react";
+import { AlertTriangle, ArrowRight, BrainCircuit, CheckCircle2, ClipboardList, Loader2, RefreshCw, ShieldCheck, Sparkles, Target, Users } from "lucide-react";
 import type { ManagerIntelligenceOverviewResponse, ManagerLearnerListResponse, PracticeAssignmentListResponse, PracticeRecommendation, WorkforceCapability } from "@simforge/shared";
 import { WORKFORCE_CAPABILITIES } from "@simforge/shared";
 import { ApiError, apiFetch } from "@/lib/api";
@@ -172,12 +172,15 @@ export function ManagerIntelligenceView() {
     <div className="mx-auto max-w-7xl space-y-8">
       <PageHeading eyebrow="Manager Intelligence" title="Team capability and practice loop" description="See learner capability evidence, identify gaps, and assign targeted simulation practice." />
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[
           { label: "Learners", value: overview.totals.learners, icon: Users },
           { label: "Completed simulations", value: overview.totals.completedSimulations, icon: CheckCircle2 },
           { label: "Open assignments", value: overview.totals.openAssignments, icon: ClipboardList },
           { label: "Completed assignments", value: overview.totals.completedAssignments, icon: Target },
+          { label: "Open assessments", value: overview.totals.openAssessments, icon: ShieldCheck },
+          { label: "Completed assessments", value: overview.totals.completedAssessments, icon: CheckCircle2 },
+          { label: "Ready signals", value: overview.totals.passedAssessments, icon: Sparkles },
           { label: "Avg capability", value: overview.totals.averageCapabilityScore ?? "Not enough data", icon: BrainCircuit },
         ].map(({ label, value, icon: Icon }) => <Card key={label}><CardContent className="p-5"><div className="flex items-start justify-between gap-3"><div><p className="text-sm text-muted-foreground">{label}</p><p className="mt-3 text-2xl font-semibold tracking-tight">{value}</p></div><span className="grid size-10 place-items-center rounded-xl bg-primary/10 text-primary"><Icon className="size-5" /></span></div></CardContent></Card>)}
       </section>

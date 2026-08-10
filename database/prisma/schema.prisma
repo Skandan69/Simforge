@@ -159,6 +159,25 @@ enum PracticeAssignmentStatus {
   CANCELLED
 }
 
+enum AssessmentStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum AssessmentAssignmentStatus {
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum AssessmentAttemptStatus {
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
 enum SimulationMessageRole {
   learner
   ai
@@ -184,6 +203,10 @@ model Profile {
   simulationSessions    SimulationSession[] @relation("SessionLearner")
   practiceAssignments   PracticeAssignment[] @relation("PracticeAssignmentLearner")
   assignedPractice      PracticeAssignment[] @relation("PracticeAssignmentAssigner")
+  assessmentsCreated    Assessment[] @relation("AssessmentCreator")
+  assessmentAssignments AssessmentAssignment[] @relation("AssessmentAssignmentLearner")
+  assignedAssessments   AssessmentAssignment[] @relation("AssessmentAssignmentAssigner")
+  assessmentAttempts    AssessmentAttempt[] @relation("AssessmentAttemptLearner")
   capabilityProfiles    LearnerCapabilityProfile[] @relation("CapabilityProfileLearner")
   coachingInsights      SimulationCoachingInsight[] @relation("CoachingInsightLearner")
 }
@@ -210,6 +233,9 @@ model Organization {
   evaluationCriteria SimulationEvaluationCriterion[]
   simulationSessions SimulationSession[]
   practiceAssignments PracticeAssignment[]
+  assessments          Assessment[]
+  assessmentAssignments AssessmentAssignment[]
+  assessmentAttempts   AssessmentAttempt[]
   capabilityProfiles LearnerCapabilityProfile[]
   learningFactoryDrafts LearningFactoryDraft[]
   coachingInsights SimulationCoachingInsight[]
@@ -284,6 +310,7 @@ model Simulation {
   versions          SimulationVersion[]
   sessions          SimulationSession[]
   practiceAssignments PracticeAssignment[]
+  assessments       Assessment[]
   publishedLearningFactoryDraft LearningFactoryDraft? @relation("LearningFactoryPublishedSimulation")
 
   @@index([organizationId, status])
@@ -390,6 +417,7 @@ model SimulationSession {
   capabilityHistory CapabilityAssessmentHistory[]
   coachingInsight SimulationCoachingInsight?
   practiceAssignment PracticeAssignment?
+  assessmentAttempt AssessmentAttempt?
 
   @@index([organizationId, createdAt])
   @@index([simulationId, status])
@@ -422,6 +450,79 @@ model PracticeAssignment {
   @@index([organizationId, learnerId, status])
   @@index([organizationId, simulationId])
   @@index([assignedBy])
+}
+
+model Assessment {
+  id               String           @id @default(uuid()) @db.Uuid
+  organizationId   String           @db.Uuid
+  simulationId     String           @db.Uuid
+  title            String
+  description      String           @default("") @db.Text
+  capabilities     String[]
+  passingScore     Float            @default(70)
+  status           AssessmentStatus @default(DRAFT)
+  createdBy        String           @db.Uuid
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  organization     Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  simulation       Simulation       @relation(fields: [simulationId], references: [id], onDelete: Cascade)
+  creator          Profile          @relation("AssessmentCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+  assignments      AssessmentAssignment[]
+  attempts         AssessmentAttempt[]
+
+  @@index([organizationId, status, updatedAt])
+  @@index([simulationId])
+  @@index([createdBy])
+}
+
+model AssessmentAssignment {
+  id             String                     @id @default(uuid()) @db.Uuid
+  organizationId String                     @db.Uuid
+  assessmentId   String                     @db.Uuid
+  learnerId      String                     @db.Uuid
+  assignedBy     String                     @db.Uuid
+  attemptId      String?                    @unique @db.Uuid
+  status         AssessmentAssignmentStatus @default(ASSIGNED)
+  reason         String                     @default("") @db.Text
+  assignedAt     DateTime                   @default(now())
+  startedAt      DateTime?
+  completedAt    DateTime?
+  cancelledAt    DateTime?
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+  organization   Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assessment     Assessment                 @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  learner        Profile                    @relation("AssessmentAssignmentLearner", fields: [learnerId], references: [id], onDelete: Cascade)
+  assigner       Profile                    @relation("AssessmentAssignmentAssigner", fields: [assignedBy], references: [id], onDelete: Cascade)
+  attempt        AssessmentAttempt?         @relation(fields: [attemptId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status, assignedAt])
+  @@index([organizationId, learnerId, status])
+  @@index([organizationId, assessmentId])
+  @@index([assignedBy])
+}
+
+model AssessmentAttempt {
+  id                  String                  @id @default(uuid()) @db.Uuid
+  organizationId      String                  @db.Uuid
+  assessmentId        String                  @db.Uuid
+  learnerId           String                  @db.Uuid
+  simulationSessionId String                  @unique @db.Uuid
+  status              AssessmentAttemptStatus @default(IN_PROGRESS)
+  overallScore        Float?
+  passed              Boolean?
+  startedAt           DateTime                @default(now())
+  completedAt         DateTime?
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+  organization        Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assessment          Assessment              @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  learner             Profile                 @relation("AssessmentAttemptLearner", fields: [learnerId], references: [id], onDelete: Cascade)
+  simulationSession   SimulationSession       @relation(fields: [simulationSessionId], references: [id], onDelete: Cascade)
+  assignment          AssessmentAssignment?
+
+  @@index([organizationId, learnerId, status])
+  @@index([organizationId, assessmentId])
 }
 
 model SimulationCoachingInsight {
