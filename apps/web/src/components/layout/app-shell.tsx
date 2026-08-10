@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
-  Bell, BookOpen, Boxes, BrainCircuit, ChevronDown, ClipboardCheck, FileBarChart,
+  Bell, BookOpen, Boxes, BrainCircuit, ChevronDown, ClipboardCheck, Dumbbell, FileBarChart,
   LayoutDashboard, Menu, Moon, Search, Settings, Sun, UserRound, Users, X,
   MessageCircleQuestion,
 } from "lucide-react";
@@ -18,6 +18,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 
 const icons = {
   Dashboard: LayoutDashboard,
+  "My Practice": Dumbbell,
   "Ask Sophia": MessageCircleQuestion,
   "Knowledge Studio": BookOpen,
   "Simulation Studio": BrainCircuit,

@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { BookOpen, BookOpenCheck, BrainCircuit, CheckCircle2, ClipboardCheck, ClipboardPenLine, Factory, Gauge, Plus, RefreshCw, UserPlus, Users } from "lucide-react";
-import type { DashboardResponse } from "@simforge/shared";
+import { BookOpen, BookOpenCheck, BrainCircuit, CheckCircle2, ClipboardCheck, ClipboardPenLine, Dumbbell, Factory, Gauge, Plus, RefreshCw, UserPlus, Users } from "lucide-react";
+import type { DashboardResponse, MyPracticeResponse } from "@simforge/shared";
 import { ApiError, apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,11 +32,17 @@ function DashboardSkeleton() {
 export function DashboardView() {
   const router = useRouter();
   const [data, setData] = useState<DashboardResponse>();
+  const [practice, setPractice] = useState<MyPracticeResponse>();
   const [error, setError] = useState<string>();
 
   const load = useCallback(async () => {
     try {
-      setData(await apiFetch<DashboardResponse>("/api/dashboard"));
+      const [dashboard, myPractice] = await Promise.all([
+        apiFetch<DashboardResponse>("/api/dashboard"),
+        apiFetch<MyPracticeResponse>("/api/my-practice").catch(() => undefined),
+      ]);
+      setData(dashboard);
+      setPractice(myPractice);
     } catch (caught) {
       if (caught instanceof ApiError && caught.code === "ORGANIZATION_REQUIRED") {
         router.replace("/onboarding");
@@ -48,8 +54,15 @@ export function DashboardView() {
 
   useEffect(() => {
     let active = true;
-    void apiFetch<DashboardResponse>("/api/dashboard")
-      .then((response) => { if (active) setData(response); })
+    void Promise.all([
+      apiFetch<DashboardResponse>("/api/dashboard"),
+      apiFetch<MyPracticeResponse>("/api/my-practice").catch(() => undefined),
+    ])
+      .then(([dashboard, myPractice]) => {
+        if (!active) return;
+        setData(dashboard);
+        setPractice(myPractice);
+      })
       .catch((caught: unknown) => {
         if (!active) return;
         if (caught instanceof ApiError && caught.code === "ORGANIZATION_REQUIRED") {
@@ -92,6 +105,23 @@ export function DashboardView() {
         <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Factory className="size-5" /></span><div><h2 className="font-semibold">Generate training from your knowledge</h2><p className="mt-1 text-sm text-muted-foreground">Prepare review-required simulations, objectives, questions, and coaching focus areas.</p></div></div>
           <Button asChild variant="outline"><Link href="/learning-factory">Open Learning Factory</Link></Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex gap-3">
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Dumbbell className="size-5" /></span>
+            <div>
+              <h2 className="font-semibold">My Practice</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {practice
+                  ? `${practice.summary.needsAttention} outstanding · ${practice.summary.inProgress} in progress · ${practice.summary.completed} recently completed`
+                  : "Review manager-assigned Sophia practice and coaching reports."}
+              </p>
+            </div>
+          </div>
+          <Button asChild variant="outline"><Link href="/my-practice">Open My Practice</Link></Button>
         </CardContent>
       </Card>
 

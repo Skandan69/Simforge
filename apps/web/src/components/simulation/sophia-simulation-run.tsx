@@ -44,10 +44,12 @@ export function SophiaSimulationRun({
   simulationId,
   autoStart = false,
   assignmentId,
+  sessionId,
 }: {
   simulationId: string;
   autoStart?: boolean;
   assignmentId?: string;
+  sessionId?: string;
 }) {
   const router = useRouter();
   const { communicationIntelligenceVisible, setCommunicationIntelligenceVisible } = useCommunicationIntelligence();
@@ -81,9 +83,17 @@ export function SophiaSimulationRun({
   const loadConfiguration = useCallback(async () => {
     setLoading(true);
     try {
-      setConfiguration(
-        await apiFetch(`/api/simulation-sessions/simulations/${simulationId}`),
-      );
+      if (sessionId) {
+        const existing = await apiFetch<SimulationSessionResponse>(`/api/simulation-sessions/${sessionId}`);
+        setSession(existing);
+        setConfiguration(existing.simulation);
+        setMessages(existing.messages);
+        setLastSophiaMessageId([...existing.messages].reverse().find((message) => message.role === "ai")?.id);
+      } else {
+        setConfiguration(
+          await apiFetch(`/api/simulation-sessions/simulations/${simulationId}`),
+        );
+      }
       setError(undefined);
     } catch (caught) {
       setError(
@@ -94,7 +104,7 @@ export function SophiaSimulationRun({
     } finally {
       setLoading(false);
     }
-  }, [simulationId]);
+  }, [sessionId, simulationId]);
   useEffect(() => {
     const timer = setTimeout(() => void loadConfiguration(), 0);
     return () => clearTimeout(timer);
