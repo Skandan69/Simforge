@@ -78,6 +78,7 @@ test("Knowledge Studio endpoints require authentication", async () => {
     "/api/organization-blueprint",
     "/api/sophia/ask",
     "/api/manager-intelligence/overview",
+    "/api/my-practice",
     "/api/manager-intelligence/learners",
     "/api/manager-intelligence/assignments",
   ]) {

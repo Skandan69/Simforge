@@ -64,6 +64,7 @@ export const DOCUMENT_MIME_TYPES = {
 
 export const NAVIGATION_ITEMS = [
   { label: "Dashboard", href: "/dashboard" },
+  { label: "My Practice", href: "/my-practice" },
   { label: "Ask Sophia", href: "/ask-sophia" },
   { label: "Knowledge Studio", href: "/knowledge-studio" },
   { label: "Simulation Studio", href: "/simulation-studio" },

@@ -700,3 +700,67 @@ export interface PracticeAssignmentListResponse {
   canManageAssignments: boolean;
   assignments: PracticeAssignmentResponse[];
 }
+
+export type MyPracticeProgressStatus =
+  | "Improved"
+  | "Stable"
+  | "Needs more practice"
+  | "Not enough data";
+
+export interface MyPracticeAssignmentResponse {
+  assignmentId: string;
+  simulation: {
+    id: string;
+    title: string;
+    description: string;
+    status: SimulationStatus;
+    estimatedMinutes: number;
+  };
+  status: PracticeAssignmentStatus;
+  reason: string;
+  focusCapability: WorkforceCapability | null;
+  assignedBy: { id: string; name: string; email: string };
+  assignedAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  cancelledAt: string | null;
+  session: {
+    id: string;
+    status: SimulationSessionStatus;
+    reportAvailable: boolean;
+    coachAvailable: boolean;
+    overallScore: number | null;
+    completedAt: string | null;
+  } | null;
+  canStart: boolean;
+  canContinue: boolean;
+  reportAvailable: boolean;
+  coachAvailable: boolean;
+}
+
+export interface MyPracticeProgressSummary {
+  status: MyPracticeProgressStatus;
+  overallScore: number | null;
+  previousOverallScore: number | null;
+  change: number | null;
+  trend: CapabilityTrend | "NOT_ENOUGH_DATA";
+  confidence: CapabilityConfidence | "NONE";
+  simulationCount: number;
+  lastAssessedAt: string | null;
+  recommendedFocusAreas: WorkforceCapability[];
+}
+
+export interface MyPracticeResponse {
+  summary: {
+    needsAttention: number;
+    inProgress: number;
+    completed: number;
+    total: number;
+  };
+  progress: MyPracticeProgressSummary;
+  assignments: {
+    needsAttention: MyPracticeAssignmentResponse[];
+    inProgress: MyPracticeAssignmentResponse[];
+    completed: MyPracticeAssignmentResponse[];
+  };
+}
