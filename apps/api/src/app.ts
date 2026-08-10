@@ -26,6 +26,7 @@ import { simulationCoachingRouter } from "./routes/simulation-coaching.js";
 import { sophiaAskRouter } from "./routes/sophia-ask.js";
 import { managerIntelligenceRouter } from "./routes/manager-intelligence.js";
 import { myPracticeRouter } from "./routes/my-practice.js";
+import { maintenanceRouter } from "./routes/maintenance.js";
 import { getAIProviderStatus } from "./ai/provider.js";
 import { getVoiceProviderStatus } from "./ai/voice-provider.js";
 import { getEmbeddingProviderStatus } from "./ai/embedding-provider.js";
@@ -99,6 +100,7 @@ app.use("/api/learning-factory", learningFactoryRouter);
 app.use("/api/sophia", sophiaAskRouter);
 app.use("/api/manager-intelligence", managerIntelligenceRouter);
 app.use("/api/my-practice", myPracticeRouter);
+app.use("/api/maintenance", maintenanceRouter);
 
 app.use((_request, response) => {
   response.status(404).json({ error: "Route not found" });
