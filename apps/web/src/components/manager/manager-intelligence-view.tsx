@@ -181,9 +181,28 @@ export function ManagerIntelligenceView() {
           { label: "Open assessments", value: overview.totals.openAssessments, icon: ShieldCheck },
           { label: "Completed assessments", value: overview.totals.completedAssessments, icon: CheckCircle2 },
           { label: "Ready signals", value: overview.totals.passedAssessments, icon: Sparkles },
+          { label: "Open paths", value: overview.totals.openDevelopmentPaths, icon: Target },
+          { label: "Completed paths", value: overview.totals.completedDevelopmentPaths, icon: CheckCircle2 },
+          { label: "Stalled paths", value: overview.totals.stalledDevelopmentPaths, icon: AlertTriangle },
           { label: "Avg capability", value: overview.totals.averageCapabilityScore ?? "Not enough data", icon: BrainCircuit },
         ].map(({ label, value, icon: Icon }) => <Card key={label}><CardContent className="p-5"><div className="flex items-start justify-between gap-3"><div><p className="text-sm text-muted-foreground">{label}</p><p className="mt-3 text-2xl font-semibold tracking-tight">{value}</p></div><span className="grid size-10 place-items-center rounded-xl bg-primary/10 text-primary"><Icon className="size-5" /></span></div></CardContent></Card>)}
       </section>
+
+      <Card>
+        <CardHeader><CardTitle className="text-base">Development path progress</CardTitle><CardDescription>Ordered practice and assessment paths assigned to learners.</CardDescription></CardHeader>
+        <CardContent className="space-y-3">
+          {overview.developmentPaths.length ? overview.developmentPaths.slice(0, 8).map((path) => (
+            <div key={path.assignmentId} className="rounded-xl border p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div><p className="font-medium">{path.pathTitle}</p><p className="mt-1 text-sm text-muted-foreground">{path.learnerName}</p></div>
+                <Badge variant={statusVariant(path.status)}>{path.status.replace("_", " ")}</Badge>
+              </div>
+              <div className="mt-3 h-2 rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{ width: `${path.percentComplete}%` }} /></div>
+              <p className="mt-2 text-xs text-muted-foreground">{path.currentStepTitle ? `Current step: ${path.currentStepTitle}` : "All required steps complete"}{path.currentStepStatus ? ` · ${path.currentStepStatus.replaceAll("_", " ")}` : ""}</p>
+            </div>
+          )) : <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">No development paths assigned yet.</div>}
+        </CardContent>
+      </Card>
 
       <section className="grid gap-6 xl:grid-cols-[1.5fr_1fr]">
         <Card>

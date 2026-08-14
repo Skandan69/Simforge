@@ -178,6 +178,24 @@ enum AssessmentAttemptStatus {
   FAILED
 }
 
+enum DevelopmentPathStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum DevelopmentPathStepType {
+  PRACTICE
+  ASSESSMENT
+}
+
+enum DevelopmentPathAssignmentStatus {
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
 enum SimulationMessageRole {
   learner
   ai
@@ -207,6 +225,9 @@ model Profile {
   assessmentAssignments AssessmentAssignment[] @relation("AssessmentAssignmentLearner")
   assignedAssessments   AssessmentAssignment[] @relation("AssessmentAssignmentAssigner")
   assessmentAttempts    AssessmentAttempt[] @relation("AssessmentAttemptLearner")
+  developmentPathsCreated DevelopmentPath[] @relation("DevelopmentPathCreator")
+  developmentPathAssignments DevelopmentPathAssignment[] @relation("DevelopmentPathAssignmentLearner")
+  assignedDevelopmentPaths DevelopmentPathAssignment[] @relation("DevelopmentPathAssignmentAssigner")
   capabilityProfiles    LearnerCapabilityProfile[] @relation("CapabilityProfileLearner")
   coachingInsights      SimulationCoachingInsight[] @relation("CoachingInsightLearner")
 }
@@ -236,6 +257,9 @@ model Organization {
   assessments          Assessment[]
   assessmentAssignments AssessmentAssignment[]
   assessmentAttempts   AssessmentAttempt[]
+  developmentPaths     DevelopmentPath[]
+  developmentPathAssignments DevelopmentPathAssignment[]
+  developmentPathStepProgress DevelopmentPathStepProgress[]
   capabilityProfiles LearnerCapabilityProfile[]
   learningFactoryDrafts LearningFactoryDraft[]
   coachingInsights SimulationCoachingInsight[]
@@ -311,6 +335,7 @@ model Simulation {
   sessions          SimulationSession[]
   practiceAssignments PracticeAssignment[]
   assessments       Assessment[]
+  developmentPathSteps DevelopmentPathStep[]
   publishedLearningFactoryDraft LearningFactoryDraft? @relation("LearningFactoryPublishedSimulation")
 
   @@index([organizationId, status])
@@ -445,6 +470,7 @@ model PracticeAssignment {
   assigner       Profile                  @relation("PracticeAssignmentAssigner", fields: [assignedBy], references: [id], onDelete: Cascade)
   simulation     Simulation               @relation(fields: [simulationId], references: [id], onDelete: Cascade)
   session        SimulationSession?       @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  developmentPathStepProgress DevelopmentPathStepProgress?
 
   @@index([organizationId, status, assignedAt])
   @@index([organizationId, learnerId, status])
@@ -469,6 +495,7 @@ model Assessment {
   creator          Profile          @relation("AssessmentCreator", fields: [createdBy], references: [id], onDelete: Cascade)
   assignments      AssessmentAssignment[]
   attempts         AssessmentAttempt[]
+  developmentPathSteps DevelopmentPathStep[]
 
   @@index([organizationId, status, updatedAt])
   @@index([simulationId])
@@ -495,6 +522,7 @@ model AssessmentAssignment {
   learner        Profile                    @relation("AssessmentAssignmentLearner", fields: [learnerId], references: [id], onDelete: Cascade)
   assigner       Profile                    @relation("AssessmentAssignmentAssigner", fields: [assignedBy], references: [id], onDelete: Cascade)
   attempt        AssessmentAttempt?         @relation(fields: [attemptId], references: [id], onDelete: SetNull)
+  developmentPathStepProgress DevelopmentPathStepProgress?
 
   @@index([organizationId, status, assignedAt])
   @@index([organizationId, learnerId, status])
@@ -523,6 +551,95 @@ model AssessmentAttempt {
 
   @@index([organizationId, learnerId, status])
   @@index([organizationId, assessmentId])
+}
+
+model DevelopmentPath {
+  id             String                @id @default(uuid()) @db.Uuid
+  organizationId String                @db.Uuid
+  title          String
+  description    String                @default("") @db.Text
+  targetRole     String                @default("")
+  department     String                @default("")
+  capabilities   String[]
+  status         DevelopmentPathStatus @default(DRAFT)
+  createdBy      String                @db.Uuid
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator        Profile               @relation("DevelopmentPathCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+  steps          DevelopmentPathStep[]
+  assignments    DevelopmentPathAssignment[]
+
+  @@index([organizationId, status, updatedAt])
+  @@index([createdBy])
+}
+
+model DevelopmentPathStep {
+  id                String                  @id @default(uuid()) @db.Uuid
+  developmentPathId String                  @db.Uuid
+  type              DevelopmentPathStepType
+  sortOrder         Int
+  title             String
+  required          Boolean                 @default(true)
+  simulationId      String?                 @db.Uuid
+  assessmentId      String?                 @db.Uuid
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  developmentPath   DevelopmentPath         @relation(fields: [developmentPathId], references: [id], onDelete: Cascade)
+  simulation        Simulation?             @relation(fields: [simulationId], references: [id], onDelete: Restrict)
+  assessment        Assessment?             @relation(fields: [assessmentId], references: [id], onDelete: Restrict)
+  progress          DevelopmentPathStepProgress[]
+
+  @@unique([developmentPathId, sortOrder])
+  @@index([simulationId])
+  @@index([assessmentId])
+}
+
+model DevelopmentPathAssignment {
+  id                String                          @id @default(uuid()) @db.Uuid
+  organizationId    String                          @db.Uuid
+  developmentPathId String                          @db.Uuid
+  learnerId         String                          @db.Uuid
+  assignedBy        String                          @db.Uuid
+  status            DevelopmentPathAssignmentStatus @default(ASSIGNED)
+  reason            String                          @default("") @db.Text
+  assignedAt        DateTime                        @default(now())
+  startedAt         DateTime?
+  completedAt       DateTime?
+  cancelledAt       DateTime?
+  createdAt         DateTime                        @default(now())
+  updatedAt         DateTime                        @updatedAt
+  organization      Organization                    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  developmentPath   DevelopmentPath                 @relation(fields: [developmentPathId], references: [id], onDelete: Cascade)
+  learner           Profile                         @relation("DevelopmentPathAssignmentLearner", fields: [learnerId], references: [id], onDelete: Cascade)
+  assigner          Profile                         @relation("DevelopmentPathAssignmentAssigner", fields: [assignedBy], references: [id], onDelete: Cascade)
+  stepProgress      DevelopmentPathStepProgress[]
+
+  @@unique([organizationId, developmentPathId, learnerId, status])
+  @@index([organizationId, status, assignedAt])
+  @@index([organizationId, learnerId, status])
+  @@index([assignedBy])
+}
+
+model DevelopmentPathStepProgress {
+  id                     String                    @id @default(uuid()) @db.Uuid
+  organizationId         String                    @db.Uuid
+  pathAssignmentId       String                    @db.Uuid
+  stepId                 String                    @db.Uuid
+  practiceAssignmentId   String?                   @unique @db.Uuid
+  assessmentAssignmentId String?                   @unique @db.Uuid
+  startedAt              DateTime                  @default(now())
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
+  organization           Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pathAssignment         DevelopmentPathAssignment @relation(fields: [pathAssignmentId], references: [id], onDelete: Cascade)
+  step                   DevelopmentPathStep       @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  practiceAssignment     PracticeAssignment?       @relation(fields: [practiceAssignmentId], references: [id], onDelete: SetNull)
+  assessmentAssignment   AssessmentAssignment?     @relation(fields: [assessmentAssignmentId], references: [id], onDelete: SetNull)
+
+  @@unique([pathAssignmentId, stepId])
+  @@index([organizationId, pathAssignmentId])
+  @@index([stepId])
 }
 
 model SimulationCoachingInsight {

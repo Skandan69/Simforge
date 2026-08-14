@@ -25,6 +25,7 @@ import { generateSophiaEvaluation, generateSophiaReply } from "../ai/sophia-serv
 import type { AIConversationMessage } from "../ai/types.js";
 import { getVoiceProviders } from "../ai/voice-provider.js";
 import { transcriptionFailureMessage, validateVoiceRecording, VoiceRecordingError } from "../services/voice-recording.js";
+import { resolvePracticeAssignmentSessionLink } from "../services/my-practice.js";
 
 const sessionIdSchema = z.string().uuid();
 const includeReport = {
@@ -96,6 +97,33 @@ simulationSessionsRouter.post("/", async (request, response) => {
       404,
       "SIMULATION_NOT_AVAILABLE",
     );
+  if (assignmentId) {
+    const assignment = await prisma.practiceAssignment.findFirst({
+      where: {
+        id: assignmentId,
+        organizationId,
+        learnerId: user.id,
+        simulationId: simulation.id,
+        status: { in: ["ASSIGNED", "IN_PROGRESS"] },
+      },
+      select: {
+        id: true,
+        sessionId: true,
+        session: { select: { id: true, organizationId: true, learnerId: true, simulationId: true } },
+      },
+    });
+    if (!assignment) throw new HttpError("Practice assignment is not available for this simulation", 404, "PRACTICE_ASSIGNMENT_NOT_FOUND");
+    const link = resolvePracticeAssignmentSessionLink({ assignment, organizationId, learnerId: user.id, simulationId: simulation.id });
+    if (link.action === "INVALID") throw new HttpError("Practice assignment session link is inconsistent", 409, "PRACTICE_ASSIGNMENT_SESSION_INVALID");
+    if (link.action === "REUSE") {
+      const existingSession = await getSession(link.sessionId, organizationId);
+      if (existingSession.learnerId !== user.id || existingSession.simulationId !== simulation.id) {
+        throw new HttpError("Practice assignment session link is inconsistent", 409, "PRACTICE_ASSIGNMENT_SESSION_INVALID");
+      }
+      response.json(existingSession);
+      return;
+    }
+  }
   const openingMessage = await generateSophiaReply({
     provider: getAIProvider(),
     systemPrompt: async () => buildSophiaSystemPrompt(await loadSophiaPromptContext({ organizationId, learnerId: user.id, simulationId: simulation.id })),
@@ -103,10 +131,69 @@ simulationSessionsRouter.post("/", async (request, response) => {
     fallback: () => createPlaceholderOpeningMessage(simulation.title, simulation.persona?.role),
     personaRole: simulation.persona?.role,
   });
-  const session = await prisma.$transaction(async (transaction) => {
-    let assignment: { id: string } | null = null;
-    if (assignmentId) {
-      assignment = await transaction.practiceAssignment.findFirst({
+  let session;
+  try {
+    session = await prisma.$transaction(async (transaction) => {
+      let assignment: { id: string; sessionId: string | null; session: { id: string; organizationId: string; learnerId: string; simulationId: string } | null } | null = null;
+      if (assignmentId) {
+        assignment = await transaction.practiceAssignment.findFirst({
+          where: {
+            id: assignmentId,
+            organizationId,
+            learnerId: user.id,
+            simulationId: simulation.id,
+            status: { in: ["ASSIGNED", "IN_PROGRESS"] },
+          },
+          select: {
+            id: true,
+            sessionId: true,
+            session: { select: { id: true, organizationId: true, learnerId: true, simulationId: true } },
+          },
+        });
+        if (!assignment) throw new HttpError("Practice assignment is not available for this simulation", 404, "PRACTICE_ASSIGNMENT_NOT_FOUND");
+        const link = resolvePracticeAssignmentSessionLink({ assignment, organizationId, learnerId: user.id, simulationId: simulation.id });
+        if (link.action === "INVALID") throw new HttpError("Practice assignment session link is inconsistent", 409, "PRACTICE_ASSIGNMENT_SESSION_INVALID");
+        if (link.action === "REUSE") {
+          const existing = await transaction.simulationSession.findFirst({
+            where: { id: link.sessionId, organizationId, learnerId: user.id, simulationId: simulation.id },
+            include: includeReport,
+          });
+          if (!existing) throw new HttpError("Practice assignment session link is inconsistent", 409, "PRACTICE_ASSIGNMENT_SESSION_INVALID");
+          return existing;
+        }
+      }
+      const created = await transaction.simulationSession.create({
+        data: {
+          organizationId,
+          simulationId: simulation.id,
+          learnerId: user.id,
+          messages: {
+            create: [
+              {
+                role: "system",
+                content: `Simulation session started for ${simulation.title}.`,
+              },
+              {
+                role: "ai",
+                content: openingMessage,
+              },
+            ],
+          },
+        },
+        include: includeReport,
+      });
+      if (assignment) {
+        const linked = await transaction.practiceAssignment.updateMany({
+          where: { id: assignment.id, sessionId: null },
+          data: { status: "IN_PROGRESS", startedAt: new Date(), sessionId: created.id },
+        });
+        if (linked.count !== 1) throw new HttpError("Practice assignment session changed while starting", 409, "PRACTICE_ASSIGNMENT_SESSION_CONFLICT");
+      }
+      return created;
+    });
+  } catch (error) {
+    if (error instanceof HttpError && error.code === "PRACTICE_ASSIGNMENT_SESSION_CONFLICT" && assignmentId) {
+      const assignment = await prisma.practiceAssignment.findFirst({
         where: {
           id: assignmentId,
           organizationId,
@@ -114,38 +201,21 @@ simulationSessionsRouter.post("/", async (request, response) => {
           simulationId: simulation.id,
           status: { in: ["ASSIGNED", "IN_PROGRESS"] },
         },
-        select: { id: true },
-      });
-      if (!assignment) throw new HttpError("Practice assignment is not available for this simulation", 404, "PRACTICE_ASSIGNMENT_NOT_FOUND");
-    }
-    const created = await transaction.simulationSession.create({
-      data: {
-        organizationId,
-        simulationId: simulation.id,
-        learnerId: user.id,
-        messages: {
-          create: [
-            {
-              role: "system",
-              content: `Simulation session started for ${simulation.title}.`,
-            },
-            {
-              role: "ai",
-              content: openingMessage,
-            },
-          ],
+        select: {
+          id: true,
+          sessionId: true,
+          session: { select: { id: true, organizationId: true, learnerId: true, simulationId: true } },
         },
-      },
-      include: includeReport,
-    });
-    if (assignment) {
-      await transaction.practiceAssignment.update({
-        where: { id: assignment.id },
-        data: { status: "IN_PROGRESS", startedAt: new Date(), sessionId: created.id },
       });
+      if (assignment) {
+        const link = resolvePracticeAssignmentSessionLink({ assignment, organizationId, learnerId: user.id, simulationId: simulation.id });
+        if (link.action === "REUSE") {
+          session = await getSession(link.sessionId, organizationId);
+        }
+      }
     }
-    return created;
-  });
+    if (!session) throw error;
+  }
   response.status(201).json(session);
 });
 

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { WORKFORCE_CAPABILITIES } from "@simforge/shared";
 import type { MyPracticeAssignmentResponse, WorkforceCapability } from "@simforge/shared";
-import { deriveAssignmentActions, myPracticeAssignmentScope, myPracticeBuckets, summarizeMyPracticeProgress } from "./my-practice.js";
+import { deriveAssignmentActions, myPracticeAssignmentScope, myPracticeBuckets, resolvePracticeAssignmentSessionLink, summarizeMyPracticeProgress } from "./my-practice.js";
 
 function assignment(status: MyPracticeAssignmentResponse["status"], overrides: Partial<MyPracticeAssignmentResponse> = {}): MyPracticeAssignmentResponse {
   return {
@@ -74,6 +74,64 @@ test("assignment actions prevent duplicate sessions and expose completed report 
     reportAvailable: true,
     coachAvailable: true,
   });
+});
+
+test("practice assignment session link creates only when no reusable session exists", () => {
+  assert.deepEqual(
+    resolvePracticeAssignmentSessionLink({
+      organizationId: "org-1",
+      learnerId: "learner-1",
+      simulationId: "simulation-1",
+      assignment: { sessionId: null, session: null },
+    }),
+    { action: "CREATE" },
+  );
+});
+
+test("practice assignment session link reuses the same learner organization simulation session", () => {
+  assert.deepEqual(
+    resolvePracticeAssignmentSessionLink({
+      organizationId: "org-1",
+      learnerId: "learner-1",
+      simulationId: "simulation-1",
+      assignment: {
+        sessionId: "session-1",
+        session: {
+          id: "session-1",
+          organizationId: "org-1",
+          learnerId: "learner-1",
+          simulationId: "simulation-1",
+        },
+      },
+    }),
+    { action: "REUSE", sessionId: "session-1" },
+  );
+});
+
+test("practice assignment session link rejects unsafe cross-scope reuse", () => {
+  const base = {
+    id: "session-1",
+    organizationId: "org-1",
+    learnerId: "learner-1",
+    simulationId: "simulation-1",
+  };
+  for (const session of [
+    null,
+    { ...base, id: "other-session" },
+    { ...base, organizationId: "org-2" },
+    { ...base, learnerId: "learner-2" },
+    { ...base, simulationId: "simulation-2" },
+  ]) {
+    assert.deepEqual(
+      resolvePracticeAssignmentSessionLink({
+        organizationId: "org-1",
+        learnerId: "learner-1",
+        simulationId: "simulation-1",
+        assignment: { sessionId: "session-1", session },
+      }),
+      { action: "INVALID" },
+    );
+  }
 });
 
 test("assignments are grouped into learner-facing practice sections", () => {

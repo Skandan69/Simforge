@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { BookOpen, BookOpenCheck, BrainCircuit, CheckCircle2, ClipboardCheck, ClipboardPenLine, Dumbbell, Factory, Gauge, Plus, RefreshCw, UserPlus, Users } from "lucide-react";
-import type { DashboardResponse, MyPracticeResponse } from "@simforge/shared";
+import { BookOpen, BookOpenCheck, BrainCircuit, CheckCircle2, ClipboardCheck, ClipboardPenLine, Dumbbell, Factory, Gauge, Plus, RefreshCw, Route, UserPlus, Users } from "lucide-react";
+import type { DashboardResponse, MyDevelopmentResponse, MyPracticeResponse } from "@simforge/shared";
 import { ApiError, apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,16 +33,19 @@ export function DashboardView() {
   const router = useRouter();
   const [data, setData] = useState<DashboardResponse>();
   const [practice, setPractice] = useState<MyPracticeResponse>();
+  const [development, setDevelopment] = useState<MyDevelopmentResponse>();
   const [error, setError] = useState<string>();
 
   const load = useCallback(async () => {
     try {
-      const [dashboard, myPractice] = await Promise.all([
+      const [dashboard, myPractice, myDevelopment] = await Promise.all([
         apiFetch<DashboardResponse>("/api/dashboard"),
         apiFetch<MyPracticeResponse>("/api/my-practice").catch(() => undefined),
+        apiFetch<MyDevelopmentResponse>("/api/my-development").catch(() => undefined),
       ]);
       setData(dashboard);
       setPractice(myPractice);
+      setDevelopment(myDevelopment);
     } catch (caught) {
       if (caught instanceof ApiError && caught.code === "ORGANIZATION_REQUIRED") {
         router.replace("/onboarding");
@@ -57,11 +60,13 @@ export function DashboardView() {
     void Promise.all([
       apiFetch<DashboardResponse>("/api/dashboard"),
       apiFetch<MyPracticeResponse>("/api/my-practice").catch(() => undefined),
+      apiFetch<MyDevelopmentResponse>("/api/my-development").catch(() => undefined),
     ])
-      .then(([dashboard, myPractice]) => {
+      .then(([dashboard, myPractice, myDevelopment]) => {
         if (!active) return;
         setData(dashboard);
         setPractice(myPractice);
+        setDevelopment(myDevelopment);
       })
       .catch((caught: unknown) => {
         if (!active) return;
@@ -122,6 +127,30 @@ export function DashboardView() {
             </div>
           </div>
           <Button asChild variant="outline"><Link href="/my-practice">Open My Practice</Link></Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex gap-3">
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Route className="size-5" /></span>
+            <div>
+              <h2 className="font-semibold">My Development</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {development
+                  ? `${development.summary.assigned} assigned · ${development.summary.inProgress} in progress · ${development.summary.completed} completed`
+                  : "Follow structured practice and assessment paths assigned by your manager."}
+              </p>
+            </div>
+          </div>
+          <Button asChild variant="outline"><Link href="/my-development">Open My Development</Link></Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Route className="size-5" /></span><div><h2 className="font-semibold">Development Paths</h2><p className="mt-1 text-sm text-muted-foreground">Create and assign ordered practice plus assessment paths from existing SimForge assets.</p></div></div>
+          <Button asChild variant="outline"><Link href="/development-paths">Open Development Paths</Link></Button>
         </CardContent>
       </Card>
 
