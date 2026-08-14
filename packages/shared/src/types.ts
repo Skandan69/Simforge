@@ -383,6 +383,10 @@ export type PracticeAssignmentStatus = "ASSIGNED" | "IN_PROGRESS" | "COMPLETED" 
 export type AssessmentStatus = "DRAFT" | "ACTIVE" | "ARCHIVED";
 export type AssessmentAssignmentStatus = "ASSIGNED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
 export type AssessmentAttemptStatus = "IN_PROGRESS" | "COMPLETED" | "FAILED";
+export type DevelopmentPathStatus = "DRAFT" | "ACTIVE" | "ARCHIVED";
+export type DevelopmentPathStepType = "PRACTICE" | "ASSESSMENT";
+export type DevelopmentPathAssignmentStatus = "ASSIGNED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+export type DevelopmentPathStepProgressStatus = "LOCKED" | "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" | "FAILED" | "NEEDS_REASSESSMENT" | "UNAVAILABLE";
 export type SimulationMessageRole = "learner" | "ai" | "system";
 export type WorkforceCapability =
   (typeof import("./constants.js").WORKFORCE_CAPABILITIES)[number];
@@ -656,6 +660,9 @@ export interface ManagerIntelligenceOverviewResponse {
     openAssessments: number;
     completedAssessments: number;
     passedAssessments: number;
+    openDevelopmentPaths: number;
+    completedDevelopmentPaths: number;
+    stalledDevelopmentPaths: number;
     averageCapabilityScore: number | null;
   };
   capabilityOverview: ManagerCapabilitySummary[];
@@ -671,6 +678,17 @@ export interface ManagerIntelligenceOverviewResponse {
     createdAt: string;
   }>;
   recommendations: PracticeRecommendation[];
+  developmentPaths: Array<{
+    assignmentId: string;
+    learnerId: string;
+    learnerName: string;
+    pathId: string;
+    pathTitle: string;
+    status: DevelopmentPathAssignmentStatus;
+    percentComplete: number;
+    currentStepTitle: string | null;
+    currentStepStatus: DevelopmentPathStepProgressStatus | null;
+  }>;
 }
 
 export interface ManagerLearnerListResponse {
@@ -803,6 +821,110 @@ export interface MyAssessmentsResponse {
     assigned: AssessmentAssignmentResponse[];
     inProgress: AssessmentAssignmentResponse[];
     completed: AssessmentAssignmentResponse[];
+  };
+}
+
+export interface DevelopmentPathStepResponse {
+  id: string;
+  type: DevelopmentPathStepType;
+  sortOrder: number;
+  title: string;
+  required: boolean;
+  simulation: { id: string; title: string; status: SimulationStatus; estimatedMinutes: number } | null;
+  assessment: { id: string; title: string; status: AssessmentStatus; passingScore: number } | null;
+}
+
+export interface DevelopmentPathResponse {
+  id: string;
+  title: string;
+  description: string;
+  targetRole: string;
+  department: string;
+  capabilities: WorkforceCapability[];
+  status: DevelopmentPathStatus;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: { id: string; name: string; email: string };
+  steps: DevelopmentPathStepResponse[];
+  assignmentCount: number;
+}
+
+export interface SaveDevelopmentPathInput {
+  title: string;
+  description?: string;
+  targetRole?: string;
+  department?: string;
+  capabilities: WorkforceCapability[];
+  status?: DevelopmentPathStatus;
+  steps: Array<{
+    id?: string;
+    type: DevelopmentPathStepType;
+    title?: string;
+    sortOrder: number;
+    required?: boolean;
+    simulationId?: string | null;
+    assessmentId?: string | null;
+  }>;
+}
+
+export interface CreateDevelopmentPathAssignmentInput {
+  learnerId: string;
+  developmentPathId: string;
+  reason?: string;
+}
+
+export interface DevelopmentPathStepProgressResponse {
+  step: DevelopmentPathStepResponse;
+  status: DevelopmentPathStepProgressStatus;
+  locked: boolean;
+  required: boolean;
+  actionLabel: string;
+  actionHref: string | null;
+  practiceAssignment: MyPracticeAssignmentResponse | null;
+  assessmentAssignment: AssessmentAssignmentResponse | null;
+}
+
+export interface DevelopmentPathAssignmentResponse {
+  id: string;
+  developmentPath: DevelopmentPathResponse;
+  learner: { id: string; name: string; email: string };
+  assignedBy: { id: string; name: string; email: string };
+  status: DevelopmentPathAssignmentStatus;
+  reason: string;
+  assignedAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  cancelledAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  progress: {
+    completedRequiredSteps: number;
+    totalRequiredSteps: number;
+    percentComplete: number;
+    currentStepTitle: string | null;
+    currentStepStatus: DevelopmentPathStepProgressStatus | null;
+  };
+  steps: DevelopmentPathStepProgressResponse[];
+}
+
+export interface DevelopmentPathDashboardResponse {
+  canManagePaths: boolean;
+  canAssignPaths: boolean;
+  paths: DevelopmentPathResponse[];
+  assignments: DevelopmentPathAssignmentResponse[];
+}
+
+export interface MyDevelopmentResponse {
+  summary: {
+    assigned: number;
+    inProgress: number;
+    completed: number;
+    total: number;
+  };
+  assignments: {
+    assigned: DevelopmentPathAssignmentResponse[];
+    inProgress: DevelopmentPathAssignmentResponse[];
+    completed: DevelopmentPathAssignmentResponse[];
   };
 }
 

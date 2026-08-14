@@ -81,10 +81,27 @@ test("Knowledge Studio endpoints require authentication", async () => {
     "/api/my-practice",
     "/api/assessments",
     "/api/my-assessments",
+    "/api/development-paths",
+    "/api/my-development",
     "/api/manager-intelligence/learners",
     "/api/manager-intelligence/assignments",
   ]) {
     const response = await fetch(`${baseUrl}${path}`);
+    assert.equal(response.status, 401, path);
+  }
+});
+
+test("Development Path endpoints require authentication", async () => {
+  for (const [path, method] of [
+    ["/api/development-paths", "GET"],
+    ["/api/development-paths", "POST"],
+    ["/api/development-paths/00000000-0000-0000-0000-000000000000/activate", "POST"],
+    ["/api/development-paths/00000000-0000-0000-0000-000000000000/assignments", "POST"],
+    ["/api/development-paths/assignments/00000000-0000-0000-0000-000000000000", "PATCH"],
+    ["/api/my-development", "GET"],
+    ["/api/my-development/00000000-0000-0000-0000-000000000000/steps/00000000-0000-0000-0000-000000000000/start", "POST"],
+  ] as const) {
+    const response = await fetch(`${baseUrl}${path}`, { method, headers: { "Content-Type": "application/json" }, body: method === "GET" ? undefined : "{}" });
     assert.equal(response.status, 401, path);
   }
 });

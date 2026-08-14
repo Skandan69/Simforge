@@ -6,6 +6,7 @@ import { HttpError } from "../lib/http-error.js";
 import { requireAuth } from "../middleware/auth.js";
 import { getWorkspaceRequest, requireWorkspace } from "../middleware/workspace.js";
 import { assertActiveSimulationForAssignment, buildPracticeRecommendations, canAccessManagerIntelligence, canManagePracticeAssignments, normalizeScore, orderCapabilities, scoreChange, summarizeLearner, summarizeTeamCapabilities } from "../services/manager-intelligence.js";
+import { summarizePathProgress } from "../services/development-paths.js";
 
 const uuidSchema = z.string().uuid();
 const createAssignmentSchema = z.object({
@@ -73,6 +74,7 @@ async function buildManagerSnapshot(organizationId: string) {
     recentSessions,
     assignments,
     assessmentAssignments,
+    developmentPathAssignments,
     recentCoachingInsights,
     simulations,
   ] = await Promise.all([
@@ -111,6 +113,22 @@ async function buildManagerSnapshot(organizationId: string) {
     prisma.assessmentAssignment.findMany({
       where: { organizationId },
       select: { id: true, status: true, attempt: { select: { passed: true } } },
+    }),
+    prisma.developmentPathAssignment.findMany({
+      where: { organizationId },
+      orderBy: { assignedAt: "desc" },
+      take: 50,
+      include: {
+        learner: { select: { id: true, email: true, fullName: true } },
+        developmentPath: { include: { steps: { orderBy: { sortOrder: "asc" } } } },
+        stepProgress: {
+          include: {
+            step: true,
+            practiceAssignment: { select: { status: true } },
+            assessmentAssignment: { select: { status: true, attempt: { select: { passed: true } } } },
+          },
+        },
+      },
     }),
     prisma.simulationCoachingInsight.findMany({
       where: { organizationId },
@@ -187,6 +205,33 @@ async function buildManagerSnapshot(organizationId: string) {
   const completedAssessments = assessmentAssignments.filter((assignment) => assignment.status === "COMPLETED").length;
   const openAssessments = assessmentAssignments.filter((assignment) => assignment.status === "ASSIGNED" || assignment.status === "IN_PROGRESS").length;
   const passedAssessments = assessmentAssignments.filter((assignment) => assignment.attempt?.passed === true).length;
+  const pathSummaries = developmentPathAssignments.map((assignment) => {
+    const progressByStep = new Map(assignment.stepProgress.map((progress) => [progress.stepId, progress]));
+    const stepStates = assignment.developmentPath.steps.map((step) => {
+      const progress = progressByStep.get(step.id);
+      const completed = progress?.practiceAssignment?.status === "COMPLETED" || (progress?.assessmentAssignment?.status === "COMPLETED" && progress.assessmentAssignment.attempt?.passed === true);
+      const failed = progress?.assessmentAssignment?.status === "COMPLETED" && progress.assessmentAssignment.attempt?.passed === false;
+      const inProgress = progress?.practiceAssignment?.status === "IN_PROGRESS" || progress?.assessmentAssignment?.status === "IN_PROGRESS";
+      return {
+        title: step.title,
+        required: step.required,
+        status: completed ? "COMPLETED" as const : failed ? "NEEDS_REASSESSMENT" as const : inProgress ? "IN_PROGRESS" as const : "NOT_STARTED" as const,
+      };
+    });
+    const progress = summarizePathProgress(stepStates);
+    return {
+      assignmentId: assignment.id,
+      learnerId: assignment.learnerId,
+      learnerName: displayName(assignment.learner),
+      pathId: assignment.developmentPathId,
+      pathTitle: assignment.developmentPath.title,
+      status: assignment.status,
+      ...progress,
+    };
+  });
+  const openDevelopmentPaths = developmentPathAssignments.filter((assignment) => assignment.status === "ASSIGNED" || assignment.status === "IN_PROGRESS").length;
+  const completedDevelopmentPaths = developmentPathAssignments.filter((assignment) => assignment.status === "COMPLETED").length;
+  const stalledDevelopmentPaths = pathSummaries.filter((path) => path.status !== "COMPLETED" && (path.currentStepStatus === "NEEDS_REASSESSMENT" || path.currentStepStatus === "NOT_STARTED")).length;
   const assessedScores = learners.map((learner) => learner.overallScore).filter((score): score is number => score !== null);
 
   return {
@@ -217,10 +262,24 @@ async function buildManagerSnapshot(organizationId: string) {
       openAssessments,
       completedAssessments,
       passedAssessments,
+      openDevelopmentPaths,
+      completedDevelopmentPaths,
+      stalledDevelopmentPaths,
       averageCapabilityScore: assessedScores.length
         ? Math.round(assessedScores.reduce((total, score) => total + score, 0) / assessedScores.length)
         : null,
     },
+    developmentPaths: pathSummaries.map((path) => ({
+      assignmentId: path.assignmentId,
+      learnerId: path.learnerId,
+      learnerName: path.learnerName,
+      pathId: path.pathId,
+      pathTitle: path.pathTitle,
+      status: path.status,
+      percentComplete: path.percentComplete,
+      currentStepTitle: path.currentStepTitle,
+      currentStepStatus: path.currentStepStatus,
+    })),
   };
 }
 
@@ -246,6 +305,7 @@ managerIntelligenceRouter.get("/overview", async (request, response) => {
       createdAt: insight.createdAt.toISOString(),
     })),
     recommendations: snapshot.recommendations,
+    developmentPaths: snapshot.developmentPaths,
   };
   response.json(payload);
 });

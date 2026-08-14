@@ -35,6 +35,9 @@ export const SIMULATION_DIFFICULTIES = [
   "Expert",
 ] as const;
 export const SIMULATION_STATUSES = ["Draft", "Active", "Archived"] as const;
+export const DEVELOPMENT_PATH_STATUSES = ["DRAFT", "ACTIVE", "ARCHIVED"] as const;
+export const DEVELOPMENT_PATH_STEP_TYPES = ["PRACTICE", "ASSESSMENT"] as const;
+export const DEVELOPMENT_PATH_ASSIGNMENT_STATUSES = ["ASSIGNED", "IN_PROGRESS", "COMPLETED", "CANCELLED"] as const;
 export const DEFAULT_EVALUATION_CRITERIA = [
   "Knowledge accuracy",
   "Communication",
@@ -64,6 +67,7 @@ export const DOCUMENT_MIME_TYPES = {
 
 export const NAVIGATION_ITEMS = [
   { label: "Dashboard", href: "/dashboard" },
+  { label: "My Development", href: "/my-development" },
   { label: "My Practice", href: "/my-practice" },
   { label: "Ask Sophia", href: "/ask-sophia" },
   { label: "Knowledge Studio", href: "/knowledge-studio" },

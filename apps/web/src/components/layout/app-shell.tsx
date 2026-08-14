@@ -7,7 +7,7 @@ import { useTheme } from "next-themes";
 import {
   Bell, BookOpen, Boxes, BrainCircuit, ChevronDown, ClipboardCheck, Dumbbell, FileBarChart,
   LayoutDashboard, Menu, Moon, Search, Settings, Sun, UserRound, Users, X,
-  MessageCircleQuestion,
+  MessageCircleQuestion, Route,
 } from "lucide-react";
 import { NAVIGATION_ITEMS } from "@simforge/shared";
 import { createClient } from "@/lib/supabase/client";
@@ -18,6 +18,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 
 const icons = {
   Dashboard: LayoutDashboard,
+  "My Development": Route,
   "My Practice": Dumbbell,
   "Ask Sophia": MessageCircleQuestion,
   "Knowledge Studio": BookOpen,
