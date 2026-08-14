@@ -18,6 +18,35 @@ export function myPracticeAssignmentScope(organizationId: string, learnerId: str
   return { organizationId, learnerId } as const;
 }
 
+export interface PracticeAssignmentSessionLinkInput {
+  assignment: {
+    sessionId: string | null;
+    session: {
+      id: string;
+      organizationId: string;
+      learnerId: string;
+      simulationId: string;
+    } | null;
+  };
+  organizationId: string;
+  learnerId: string;
+  simulationId: string;
+}
+
+export function resolvePracticeAssignmentSessionLink(input: PracticeAssignmentSessionLinkInput) {
+  const { assignment, organizationId, learnerId, simulationId } = input;
+  if (!assignment.sessionId) return { action: "CREATE" as const };
+  if (!assignment.session || assignment.session.id !== assignment.sessionId) return { action: "INVALID" as const };
+  if (
+    assignment.session.organizationId !== organizationId
+    || assignment.session.learnerId !== learnerId
+    || assignment.session.simulationId !== simulationId
+  ) {
+    return { action: "INVALID" as const };
+  }
+  return { action: "REUSE" as const, sessionId: assignment.sessionId };
+}
+
 export function myPracticeBuckets(assignments: MyPracticeAssignmentResponse[]) {
   return {
     needsAttention: assignments.filter((assignment) => assignment.status === "ASSIGNED"),
