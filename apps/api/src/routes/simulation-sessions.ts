@@ -363,6 +363,26 @@ simulationSessionsRouter.post("/:id/evaluate", async (request, response) => {
       where: { organizationId, sessionId: session.id, status: { in: ["ASSIGNED", "IN_PROGRESS"] } },
       data: { status: "COMPLETED", completedAt: assessedAt },
     });
+    const assessmentAttempt = await transaction.assessmentAttempt.findUnique({
+      where: { simulationSessionId: session.id },
+      include: { assessment: { select: { passingScore: true } } },
+    });
+    if (assessmentAttempt) {
+      const passed = result.overallScore >= assessmentAttempt.assessment.passingScore;
+      await transaction.assessmentAttempt.update({
+        where: { id: assessmentAttempt.id },
+        data: {
+          status: "COMPLETED",
+          completedAt: assessedAt,
+          overallScore: result.overallScore,
+          passed,
+        },
+      });
+      await transaction.assessmentAssignment.updateMany({
+        where: { organizationId, attemptId: assessmentAttempt.id, status: { in: ["ASSIGNED", "IN_PROGRESS"] } },
+        data: { status: "COMPLETED", completedAt: assessedAt },
+      });
+    }
   }, { timeout: 15_000 });
   response.json(await getSession(session.id, organizationId));
 });

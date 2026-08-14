@@ -44,11 +44,13 @@ export function SophiaSimulationRun({
   simulationId,
   autoStart = false,
   assignmentId,
+  assessmentAssignmentId,
   sessionId,
 }: {
   simulationId: string;
   autoStart?: boolean;
   assignmentId?: string;
+  assessmentAssignmentId?: string;
   sessionId?: string;
 }) {
   const router = useRouter();
@@ -133,10 +135,15 @@ export function SophiaSimulationRun({
     setStarting(true);
     setError(undefined);
     try {
-      const created = await apiFetch<SimulationSessionResponse>(
-        "/api/simulation-sessions",
-        { method: "POST", body: JSON.stringify({ simulationId, assignmentId }) },
-      );
+      const created = assessmentAssignmentId
+        ? await apiFetch<SimulationSessionResponse>(
+            `/api/my-assessments/${assessmentAssignmentId}/start`,
+            { method: "POST" },
+          )
+        : await apiFetch<SimulationSessionResponse>(
+            "/api/simulation-sessions",
+            { method: "POST", body: JSON.stringify({ simulationId, assignmentId }) },
+          );
       setSession(created);
       setConfiguration(created.simulation);
       setMessages(created.messages);
@@ -150,7 +157,7 @@ export function SophiaSimulationRun({
     } finally {
       setStarting(false);
     }
-  }, [assignmentId, simulationId]);
+  }, [assessmentAssignmentId, assignmentId, simulationId]);
   useEffect(() => {
     if (!autoStart || !configuration || session || autoStartHandled.current)
       return;

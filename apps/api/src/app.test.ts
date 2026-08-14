@@ -79,6 +79,8 @@ test("Knowledge Studio endpoints require authentication", async () => {
     "/api/sophia/ask",
     "/api/manager-intelligence/overview",
     "/api/my-practice",
+    "/api/assessments",
+    "/api/my-assessments",
     "/api/manager-intelligence/learners",
     "/api/manager-intelligence/assignments",
   ]) {
@@ -135,6 +137,20 @@ test("AI Coach endpoints require authentication", async () => {
 
 test("Learning Factory endpoints require authentication", async () => {
   for (const [path, method] of [["/api/learning-factory/drafts", "GET"], ["/api/learning-factory/generate", "POST"], ["/api/learning-factory/drafts/00000000-0000-0000-0000-000000000000/publish-simulation", "POST"]] as const) {
+    const response = await fetch(`${baseUrl}${path}`, { method, headers: { "Content-Type": "application/json" }, body: method === "POST" ? "{}" : undefined });
+    assert.equal(response.status, 401, path);
+  }
+});
+
+test("Assessment Studio endpoints require authentication", async () => {
+  for (const [path, method] of [
+    ["/api/assessments", "GET"],
+    ["/api/assessments", "POST"],
+    ["/api/assessments/00000000-0000-0000-0000-000000000000/activate", "POST"],
+    ["/api/assessments/00000000-0000-0000-0000-000000000000/assignments", "POST"],
+    ["/api/my-assessments", "GET"],
+    ["/api/my-assessments/00000000-0000-0000-0000-000000000000/start", "POST"],
+  ] as const) {
     const response = await fetch(`${baseUrl}${path}`, { method, headers: { "Content-Type": "application/json" }, body: method === "POST" ? "{}" : undefined });
     assert.equal(response.status, 401, path);
   }

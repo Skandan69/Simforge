@@ -380,6 +380,9 @@ export interface SimulationDashboardResponse {
 
 export type SimulationSessionStatus = "IN_PROGRESS" | "COMPLETED" | "FAILED";
 export type PracticeAssignmentStatus = "ASSIGNED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+export type AssessmentStatus = "DRAFT" | "ACTIVE" | "ARCHIVED";
+export type AssessmentAssignmentStatus = "ASSIGNED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+export type AssessmentAttemptStatus = "IN_PROGRESS" | "COMPLETED" | "FAILED";
 export type SimulationMessageRole = "learner" | "ai" | "system";
 export type WorkforceCapability =
   (typeof import("./constants.js").WORKFORCE_CAPABILITIES)[number];
@@ -650,6 +653,9 @@ export interface ManagerIntelligenceOverviewResponse {
     inProgressSimulations: number;
     openAssignments: number;
     completedAssignments: number;
+    openAssessments: number;
+    completedAssessments: number;
+    passedAssessments: number;
     averageCapabilityScore: number | null;
   };
   capabilityOverview: ManagerCapabilitySummary[];
@@ -699,6 +705,105 @@ export interface ManagerLearnerDetailResponse {
 export interface PracticeAssignmentListResponse {
   canManageAssignments: boolean;
   assignments: PracticeAssignmentResponse[];
+}
+
+export interface AssessmentResponse {
+  id: string;
+  title: string;
+  description: string;
+  status: AssessmentStatus;
+  passingScore: number;
+  capabilities: WorkforceCapability[];
+  createdAt: string;
+  updatedAt: string;
+  simulation: {
+    id: string;
+    title: string;
+    description: string;
+    status: SimulationStatus;
+    estimatedMinutes: number;
+  };
+  createdBy: { id: string; name: string; email: string };
+  assignmentCount: number;
+  completedAttemptCount: number;
+  passCount: number;
+}
+
+export interface SaveAssessmentInput {
+  title: string;
+  description?: string;
+  simulationId: string;
+  capabilities: WorkforceCapability[];
+  passingScore: number;
+  status?: AssessmentStatus;
+}
+
+export interface AssessmentAssignmentResponse {
+  id: string;
+  assessment: {
+    id: string;
+    title: string;
+    description: string;
+    status: AssessmentStatus;
+    passingScore: number;
+    capabilities: WorkforceCapability[];
+    simulation: {
+      id: string;
+      title: string;
+      description: string;
+      status: SimulationStatus;
+      estimatedMinutes: number;
+    };
+  };
+  learner: { id: string; name: string; email: string };
+  assignedBy: { id: string; name: string; email: string };
+  attemptId: string | null;
+  sessionId: string | null;
+  status: AssessmentAssignmentStatus;
+  reason: string;
+  assignedAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  cancelledAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  result: {
+    overallScore: number | null;
+    passed: boolean | null;
+    reportAvailable: boolean;
+    coachAvailable: boolean;
+  };
+  canStart: boolean;
+  canContinue: boolean;
+  reportAvailable: boolean;
+}
+
+export interface CreateAssessmentAssignmentInput {
+  learnerId: string;
+  assessmentId: string;
+  reason?: string;
+}
+
+export interface AssessmentDashboardResponse {
+  canManageAssessments: boolean;
+  canAssignAssessments: boolean;
+  assessments: AssessmentResponse[];
+  assignments: AssessmentAssignmentResponse[];
+}
+
+export interface MyAssessmentsResponse {
+  summary: {
+    assigned: number;
+    inProgress: number;
+    completed: number;
+    passed: number;
+    total: number;
+  };
+  assignments: {
+    assigned: AssessmentAssignmentResponse[];
+    inProgress: AssessmentAssignmentResponse[];
+    completed: AssessmentAssignmentResponse[];
+  };
 }
 
 export type MyPracticeProgressStatus =
