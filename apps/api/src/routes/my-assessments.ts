@@ -205,7 +205,7 @@ myAssessmentsRouter.post("/:assignmentId/start", async (request, response) => {
           ],
         },
       },
-      include: assignmentInclude.attempt.include.simulationSession.select,
+      select: assignmentInclude.attempt.include.simulationSession.select,
     });
     const attempt = await transaction.assessmentAttempt.create({
       data: {

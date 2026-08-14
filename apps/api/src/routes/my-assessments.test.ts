@@ -16,3 +16,18 @@ test("assessment start reuses existing attempt session instead of creating dupli
   assert.match(source, /transaction\.simulationSession\.create/u);
   assert.match(source, /transaction\.assessmentAttempt\.create/u);
 });
+
+test("assessment start creates a session with a valid Prisma select shape", () => {
+  assert.match(
+    source,
+    /transaction\.simulationSession\.create\(\{[\s\S]*select:\s*assignmentInclude\.attempt\.include\.simulationSession\.select/u,
+  );
+  assert.doesNotMatch(
+    source,
+    /transaction\.simulationSession\.create\(\{[\s\S]*include:\s*assignmentInclude\.attempt\.include\.simulationSession\.select/u,
+  );
+  assert.match(
+    source,
+    /transaction\.assessmentAssignment\.update\(\{[\s\S]*status:\s*"IN_PROGRESS"[\s\S]*attemptId:\s*attempt\.id/u,
+  );
+});
