@@ -11,6 +11,7 @@ process.env.SUPABASE_PUBLISHABLE_KEY = "sb_publishable_test";
 process.env.SUPABASE_SERVICE_ROLE_KEY = "service_role_test";
 process.env.WEB_URL = "http://localhost:3000";
 process.env.FRONTEND_URL = "https://simforge-web-pi.vercel.app";
+process.env.HEALTH_DETAILS_TOKEN = "test-health-token-123456";
 
 const { app } = await import("./app.js");
 const { requireKnowledgeWrite, requireSimulationRead, requireSimulationWrite } =
@@ -28,8 +29,16 @@ after(
     ),
 );
 
-test("health endpoint reports the API service", async () => {
+test("public health endpoint does not leak deployment or provider details", async () => {
   const response = await fetch(`${baseUrl}/health`);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { status: "ok", service: "simforge-api" });
+});
+
+test("health details require the diagnostics token", async () => {
+  assert.equal((await fetch(`${baseUrl}/health/details`)).status, 404);
+  assert.equal((await fetch(`${baseUrl}/health/details`, { headers: { "x-health-token": "wrong-token-000000000" } })).status, 404);
+  const response = await fetch(`${baseUrl}/health/details`, { headers: { "x-health-token": "test-health-token-123456" } });
   assert.equal(response.status, 200);
   const body = await response.json() as { status: string; service: string; ai: { provider: string; configured: boolean; reason: string }; voice: { sttConfigured: boolean; ttsConfigured: boolean; ttsVoice: string }; embeddings: { provider: string; configured: boolean; model: string; dimensions: number; indexDimensions: number; dimensionMatches: boolean }; deployment: { render: boolean; branch: string | null; commit: string | null; service: string | null; region: string | null } };
   assert.equal(body.status, "ok");

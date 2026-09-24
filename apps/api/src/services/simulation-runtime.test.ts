@@ -70,3 +70,17 @@ test("placeholder response is deterministic and scenario-specific", () => {
     /frustrated customer/,
   );
 });
+
+test("completed assessment sessions can never be re-graded", async () => {
+  const { evaluationAllowance } = await import("./simulation-runtime.js");
+  assert.deepEqual(evaluationAllowance("COMPLETED", "Learner", true), { allowed: false, reason: "SESSION_ALREADY_EVALUATED" });
+  assert.deepEqual(evaluationAllowance("COMPLETED", "Owner", true), { allowed: false, reason: "SESSION_ALREADY_EVALUATED" });
+  assert.deepEqual(evaluationAllowance("IN_PROGRESS", "Learner", true), { allowed: true, claimableStatuses: ["IN_PROGRESS"] });
+});
+
+test("learners cannot re-evaluate completed practice, staff can", async () => {
+  const { evaluationAllowance } = await import("./simulation-runtime.js");
+  assert.deepEqual(evaluationAllowance("COMPLETED", "Learner", false), { allowed: false, reason: "SESSION_ALREADY_EVALUATED" });
+  assert.deepEqual(evaluationAllowance("COMPLETED", "Trainer", false), { allowed: true, claimableStatuses: ["IN_PROGRESS", "COMPLETED"] });
+  assert.deepEqual(evaluationAllowance("FAILED", "Owner", false), { allowed: false, reason: "SESSION_FAILED" });
+});

@@ -23,5 +23,11 @@ services:
         sync: false
       - key: WEB_URL
         sync: false
+      # Without this the API silently falls back to non-AI placeholder scoring.
+      - key: OPENAI_API_KEY
+        sync: false
+      # Secret for GET /health/details (x-health-token header). Leave unset to disable.
+      - key: HEALTH_DETAILS_TOKEN
+        generateValue: true
       - key: FRONTEND_URL
         value: https://simforge-web-pi.vercel.app

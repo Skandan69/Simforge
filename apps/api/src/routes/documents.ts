@@ -12,7 +12,7 @@ import { HttpError } from "../lib/http-error.js";
 import { requireAuth } from "../middleware/auth.js";
 import { getWorkspaceRequest, requireKnowledgeWrite, requireWorkspace } from "../middleware/workspace.js";
 import { documentDetail, documentSummary, versionSummary } from "../services/knowledge-mappers.js";
-import { removeKnowledgeFiles } from "../services/storage.js";
+import { removeKnowledgeFiles, verifyUploadedKnowledgeFile } from "../services/storage.js";
 import { processingEngine } from "../processing/engine.js";
 
 const metadataSchema = z.object({
@@ -50,6 +50,18 @@ function validateStoragePath(path: string, organizationId: string, knowledgeBase
   }
 }
 
+async function confirmUploadedSize(storagePath: string) {
+  const check = await verifyUploadedKnowledgeFile(storagePath, MAX_DOCUMENT_SIZE_BYTES);
+  if (!check.ok) {
+    if (check.reason === "TOO_LARGE") {
+      await removeKnowledgeFiles([storagePath]).catch(() => undefined);
+      throw new HttpError("Uploaded file exceeds the maximum size", 413, "FILE_TOO_LARGE");
+    }
+    throw new HttpError("Uploaded file was not found in storage", 400, "UPLOAD_NOT_FOUND");
+  }
+  return check.size;
+}
+
 export const documentsRouter = Router();
 documentsRouter.use(requireAuth, requireWorkspace);
 
@@ -83,6 +95,7 @@ documentsRouter.post("/", requireKnowledgeWrite, async (request, response) => {
   });
   if (!knowledgeBase) throw new HttpError("Active knowledge base not found", 404);
   validateStoragePath(input.storagePath, organizationId, knowledgeBase.id);
+  input.sizeBytes = await confirmUploadedSize(input.storagePath);
 
   const document = await prisma.document.create({
     data: {
@@ -206,6 +219,9 @@ documentsRouter.post("/:id/versions", requireKnowledgeWrite, async (request, res
   });
   if (!existing) throw new HttpError("Document not found", 404);
   validateStoragePath(input.storagePath, organizationId, existing.knowledgeBase.id);
+  if (await processingEngine.hasActiveJob(existing.id))
+    throw new HttpError("This document is still being processed. Wait for it to finish, then upload the new version.", 409, "PROCESSING_ACTIVE");
+  input.sizeBytes = await confirmUploadedSize(input.storagePath);
   const nextVersion = existing.currentVersion + 1;
   const updated = await prisma.document.update({
     where: { id: existing.id },

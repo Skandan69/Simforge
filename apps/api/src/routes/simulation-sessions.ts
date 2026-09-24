@@ -10,6 +10,7 @@ import {
 import {
   buildDeterministicEvaluation,
   canEvaluateSession,
+  evaluationAllowance,
   canReadSession,
   canStartSimulation,
   createPlaceholderAiResponse,
@@ -345,11 +346,18 @@ simulationSessionsRouter.post("/:id/evaluate", async (request, response) => {
       403,
       "SESSION_EVALUATION_DENIED",
     );
-  if (session.status === "FAILED")
+  const linkedAttempt = await prisma.assessmentAttempt.findUnique({
+    where: { simulationSessionId: session.id },
+    select: { id: true },
+  });
+  const allowance = evaluationAllowance(session.status, role, Boolean(linkedAttempt));
+  if (!allowance.allowed)
     throw new HttpError(
-      "Failed sessions cannot be evaluated",
+      allowance.reason === "SESSION_FAILED"
+        ? "Failed sessions cannot be evaluated"
+        : "This simulation session has already been evaluated",
       409,
-      "SESSION_FAILED",
+      allowance.reason,
     );
   const learnerMessages = session.messages
     .filter((message) => message.role === "learner")
@@ -387,6 +395,17 @@ simulationSessionsRouter.post("/:id/evaluate", async (request, response) => {
     result.capabilityScores,
   );
   await prisma.$transaction(async (transaction) => {
+    // Claim the session atomically so two concurrent /evaluate calls cannot both grade it.
+    const claimed = await transaction.simulationSession.updateMany({
+      where: { id: session.id, organizationId, status: { in: allowance.claimableStatuses } },
+      data: {
+        status: "COMPLETED",
+        completedAt: assessedAt,
+        overallScore: result.overallScore,
+      },
+    });
+    if (claimed.count !== 1)
+      throw new HttpError("This simulation session has already been evaluated", 409, "SESSION_ALREADY_EVALUATED");
     await transaction.simulationEvaluation.upsert({
       where: { sessionId: session.id },
       create: {
@@ -421,14 +440,6 @@ simulationSessionsRouter.post("/:id/evaluate", async (request, response) => {
       assessedAt,
       scores: result.capabilityScores,
     }, capabilityUpdate);
-    await transaction.simulationSession.update({
-      where: { id: session.id },
-      data: {
-        status: "COMPLETED",
-        completedAt: assessedAt,
-        overallScore: result.overallScore,
-      },
-    });
     await transaction.practiceAssignment.updateMany({
       where: { organizationId, sessionId: session.id, status: { in: ["ASSIGNED", "IN_PROGRESS"] } },
       data: { status: "COMPLETED", completedAt: assessedAt },
@@ -439,8 +450,8 @@ simulationSessionsRouter.post("/:id/evaluate", async (request, response) => {
     });
     if (assessmentAttempt) {
       const passed = result.overallScore >= assessmentAttempt.assessment.passingScore;
-      await transaction.assessmentAttempt.update({
-        where: { id: assessmentAttempt.id },
+      const graded = await transaction.assessmentAttempt.updateMany({
+        where: { id: assessmentAttempt.id, status: "IN_PROGRESS" },
         data: {
           status: "COMPLETED",
           completedAt: assessedAt,
@@ -448,6 +459,8 @@ simulationSessionsRouter.post("/:id/evaluate", async (request, response) => {
           passed,
         },
       });
+      if (graded.count !== 1)
+        throw new HttpError("This assessment attempt has already been graded", 409, "ASSESSMENT_ALREADY_GRADED");
       await transaction.assessmentAssignment.updateMany({
         where: { organizationId, attemptId: assessmentAttempt.id, status: { in: ["ASSIGNED", "IN_PROGRESS"] } },
         data: { status: "COMPLETED", completedAt: assessedAt },
