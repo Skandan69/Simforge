@@ -18,6 +18,10 @@ export function getWorkspaceRequest(request: Request) {
 
 const workspaceCache = new TtlCache<string, { organizationId: string; role: UserRole } | null>(15_000);
 
+export function invalidateWorkspaceCache(userId: string) {
+  workspaceCache.delete(userId);
+}
+
 export const requireWorkspace: RequestHandler = async (
   request,
   response,
