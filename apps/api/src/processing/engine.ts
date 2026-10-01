@@ -34,7 +34,12 @@ export class KnowledgeProcessingEngine {
   async process(jobId: string) {
     const started = Date.now();
     const job = await prisma.processingJob.findUnique({ where: { id: jobId }, include: { source: { include: { document: true } } } });
-    if (!job?.source.document) throw new Error("Processable document source not found");
+    if (!job) return;
+    if (!job.source.document) {
+      // The document was deleted after queueing. Close the job instead of leaving it "Processing" forever.
+      await prisma.processingJob.update({ where: { id: job.id }, data: { status: "Failed", progress: 0, failureReason: "SOURCE_MISSING", errorMessage: "Processable document source not found", durationMs: Date.now() - started } });
+      return;
+    }
     const { source } = job; const document = source.document!;
     try {
       await this.progress(job.id, source.id, 15);
@@ -50,7 +55,9 @@ export class KnowledgeProcessingEngine {
       const intelligenceSections = analyzeKnowledge(text);
       const duration = Date.now() - started;
       await prisma.$transaction([
-        prisma.knowledgeChunk.deleteMany({ where: { sourceId: source.id, documentVersion, status: { in: ["PROCESSING", "FAILED"] } } }),
+        // Replace every chunk of this version (including ACTIVE ones from an earlier run);
+        // otherwise createMany collides with @@unique([sourceId, documentVersion, chunkNumber]) on reprocess.
+        prisma.knowledgeChunk.deleteMany({ where: { sourceId: source.id, documentVersion } }),
         prisma.knowledgeIntelligenceSection.deleteMany({ where: { sourceId: source.id } }),
         prisma.knowledgeChunk.createMany({ data: chunks.map((chunk) => ({ ...chunk, sourceId: source.id, documentId: document.id, documentVersion, status: "PROCESSING", headingPath: chunk.headingPath ?? undefined, metadata: { ...chunk.metadata, documentVersion, sourceType: source.sourceType, fileName: document.fileName } })) }),
         prisma.knowledgeIntelligenceSection.createMany({ data: intelligenceSections.map((section) => ({ ...section, sourceId: source.id })) }),
@@ -95,6 +102,37 @@ export class KnowledgeProcessingEngine {
     else await prisma.processingJob.update({ where: { id: job.id }, data: { cancelRequestedAt: new Date() } });
   }
   async reprocess(documentId: string, organizationId: string) { const source = await prisma.knowledgeSource.findFirst({ where: { documentId, organizationId } }); if (source) { const active = await prisma.processingJob.count({ where: { sourceId: source.id, status: { in: ["Queued", "Processing"] } } }); if (active) throw new Error("Source is already processing"); } return this.queue(documentId, organizationId); }
+
+  async hasActiveJob(documentId: string) {
+    const active = await prisma.processingJob.count({ where: { source: { documentId }, status: { in: ["Queued", "Processing"] } } });
+    return active > 0;
+  }
+
+  /**
+   * Recovers jobs orphaned by a crash or deploy. A job that has been "Processing"
+   * without any progress update (updatedAt) for longer than staleAfterMs is
+   * re-queued, or failed once it has used all its attempts.
+   */
+  async recoverStaleJobs(staleAfterMs: number, now = new Date()) {
+    const cutoff = new Date(now.getTime() - staleAfterMs);
+    const stale = await prisma.processingJob.findMany({ where: { status: "Processing", updatedAt: { lt: cutoff } }, select: { id: true, sourceId: true, attempt: true, maxAttempts: true }, take: 50 });
+    let requeued = 0; let failed = 0;
+    for (const job of stale) {
+      const exhausted = job.attempt >= job.maxAttempts;
+      // Compare-and-set on updatedAt so a job that just reported progress is left alone.
+      const updated = await prisma.processingJob.updateMany({
+        where: { id: job.id, status: "Processing", updatedAt: { lt: cutoff } },
+        data: exhausted
+          ? { status: "Failed", progress: 0, failureReason: "PROCESSING_TIMEOUT", errorMessage: "Processing stopped unexpectedly (worker restart or timeout)" }
+          : { status: "Queued", progress: 5, queuedAt: new Date(), cancelRequestedAt: null },
+      });
+      if (!updated.count) continue;
+      if (exhausted) failed += 1; else requeued += 1;
+      await prisma.knowledgeSource.update({ where: { id: job.sourceId }, data: exhausted ? { status: "Failed", progress: 0, failureReason: "Processing stopped unexpectedly. Retry or reprocess the document." } : { status: "Queued", progress: 5, failureReason: null } });
+      await this.log(job.sourceId, job.id, exhausted ? "failed" : "recovered", exhausted ? "Processing timed out after all attempts" : "Stale processing job re-queued after worker interruption", exhausted ? "Error" : "Warning");
+    }
+    return { requeued, failed };
+  }
   private async assertNotCancelled(jobId: string) { const job = await prisma.processingJob.findUnique({ where: { id: jobId }, select: { cancelRequestedAt: true } }); if (job?.cancelRequestedAt) throw new Error("PROCESSING_CANCELLED"); }
   private async progress(jobId: string, sourceId: string, progress: number) { await prisma.$transaction([prisma.processingJob.update({ where: { id: jobId }, data: { progress } }), prisma.knowledgeSource.update({ where: { id: sourceId }, data: { status: "Processing", progress } })]); }
   private async log(sourceId: string, jobId: string, event: string, message: string, level: "Info" | "Warning" | "Error" = "Info") { await prisma.processingLog.create({ data: { sourceId, jobId, event, message, level } }); }

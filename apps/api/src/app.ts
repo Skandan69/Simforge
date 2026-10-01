@@ -1,6 +1,5 @@
 import cors from "cors";
 import express from "express";
-import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import { ZodError } from "zod";
 import { API_SERVICE_NAME } from "@simforge/shared";
@@ -29,10 +28,12 @@ import { myPracticeRouter } from "./routes/my-practice.js";
 import { assessmentsRouter } from "./routes/assessments.js";
 import { myAssessmentsRouter } from "./routes/my-assessments.js";
 import { developmentPathsRouter, myDevelopmentRouter } from "./routes/development-paths.js";
+import { membersRouter } from "./routes/members.js";
 import { getAIProviderStatus } from "./ai/provider.js";
 import { getVoiceProviderStatus } from "./ai/voice-provider.js";
 import { getEmbeddingProviderStatus } from "./ai/embedding-provider.js";
 import { startRequestTiming } from "./lib/request-timing.js";
+import { createAiRateLimit, createApiRateLimit } from "./middleware/rate-limits.js";
 
 export const app = express();
 const env = getEnv();
@@ -46,6 +47,9 @@ const allowedOrigins = new Set([
 ]);
 
 app.disable("x-powered-by");
+// Render (and most PaaS) put one load balancer in front of the app. Without this,
+// req.ip is the proxy's address and every user shares one rate-limit bucket.
+app.set("trust proxy", env.TRUST_PROXY_HOPS ?? (env.NODE_ENV === "production" ? 1 : 0));
 app.use(startRequestTiming);
 app.use(helmet());
 app.use(
@@ -57,17 +61,25 @@ app.use(
   }),
 );
 app.use(express.json({ limit: "1mb" }));
+app.use("/api", createApiRateLimit(env.API_RATE_LIMIT_PER_MINUTE));
 app.use(
-  "/api",
-  rateLimit({
-    windowMs: 60_000,
-    limit: 120,
-    standardHeaders: "draft-8",
-    legacyHeaders: false,
-  }),
+  ["/api/simulation-sessions", "/api/sophia", "/api/learning-factory"],
+  createAiRateLimit(env.AI_RATE_LIMIT_PER_MINUTE),
 );
 
+// Public liveness probe: deliberately minimal so it does not reveal providers,
+// model names or the deployed commit to anonymous callers.
 app.get("/health", (_request, response) => {
+  response.status(200).json({ status: "ok", service: API_SERVICE_NAME });
+});
+
+// Operational diagnostics, only when HEALTH_DETAILS_TOKEN is set and supplied.
+app.get("/health/details", (request, response) => {
+  const token = env.HEALTH_DETAILS_TOKEN;
+  if (!token || request.get("x-health-token") !== token) {
+    response.status(404).json({ error: "Route not found" });
+    return;
+  }
   response.status(200).json({
     status: "ok",
     service: API_SERVICE_NAME,
@@ -86,6 +98,7 @@ app.get("/health", (_request, response) => {
 
 app.use("/api/me", meRouter);
 app.use("/api/organizations", organizationsRouter);
+app.use("/api/members", membersRouter);
 app.use("/api/organization-blueprint", organizationBlueprintRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/knowledge-bases", knowledgeBasesRouter);

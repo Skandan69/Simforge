@@ -16,16 +16,31 @@ async function sourceForDocument(documentId: string, organizationId: string) {
   if (!source) throw new HttpError("Processing source not found", 404);
   return source;
 }
+// Engine errors we expect and can show to users; anything else (e.g. Prisma
+// errors) is logged and replaced with a generic message.
+const KNOWN_PROCESSING_ERRORS = new Set([
+  "Document not found",
+  "Source is already processing",
+  "No retryable processing job found",
+  "No active processing job found",
+]);
+function toProcessingHttpError(error: unknown, fallback: string, status: number) {
+  if (error instanceof HttpError) return error;
+  if (error instanceof Error && KNOWN_PROCESSING_ERRORS.has(error.message))
+    return new HttpError(error.message, error.message === "Document not found" ? 404 : status);
+  console.error("Processing action failed", { errorType: error instanceof Error ? error.name : "UnknownError", message: error instanceof Error ? error.message : String(error) });
+  return new HttpError(fallback, 500, "PROCESSING_ACTION_FAILED");
+}
 function mapSource(source: any): ProcessingSourceDetail {
   const job = source.jobs?.[0];
   return { sourceId: source.id, documentId: source.documentId, title: source.title, fileType: source.sourceType, sizeBytes: Number(source.sizeBytes ?? 0), status: source.status, progress: source.progress, failureReason: source.failureReason, processedAt: source.processedAt?.toISOString() ?? null, pageCount: source.pageCount, wordCount: source.wordCount, characterCount: source.characterCount, estimatedTokens: source.estimatedTokens, language: source.language, processingDurationMs: source.processingDurationMs, chunkCount: source._count?.chunks ?? 0, latestJob: job ? { id: job.id, retryCount: job.retryCount, maxAttempts: job.maxAttempts, queuedAt: job.queuedAt.toISOString(), startedAt: job.startedAt?.toISOString() ?? null } : null };
 }
 const detailInclude = { jobs: { orderBy: { createdAt: "desc" as const }, take: 1 }, _count: { select: { chunks: true } } };
 
-processingRouter.post("/documents/:documentId/queue", requireKnowledgeWrite, async (request, response) => { const { organizationId } = getWorkspaceRequest(request).workspace; try { const job = await processingEngine.queue(idOf(request.params.documentId), organizationId); response.status(202).json(job); } catch (error) { throw new HttpError(error instanceof Error ? error.message : "Unable to queue source", 400); } });
-processingRouter.post("/documents/:documentId/reprocess", requireKnowledgeWrite, async (request, response) => { const { organizationId } = getWorkspaceRequest(request).workspace; try { const job = await processingEngine.reprocess(idOf(request.params.documentId), organizationId); response.status(202).json(job); } catch (error) { throw new HttpError(error instanceof Error ? error.message : "Unable to reprocess source", 409); } });
-processingRouter.post("/documents/:documentId/retry", requireKnowledgeWrite, async (request, response) => { const { organizationId } = getWorkspaceRequest(request).workspace; const source = await sourceForDocument(idOf(request.params.documentId), organizationId); try { const job = await processingEngine.retry(source.id); await prisma.knowledgeSource.update({ where: { id: source.id }, data: { status: "Queued", progress: 5, failureReason: null } }); response.status(202).json(job); } catch (error) { throw new HttpError(error instanceof Error ? error.message : "Unable to retry source", 409); } });
-processingRouter.post("/documents/:documentId/cancel", requireKnowledgeWrite, async (request, response) => { const { organizationId } = getWorkspaceRequest(request).workspace; const source = await sourceForDocument(idOf(request.params.documentId), organizationId); try { await processingEngine.cancel(source.id); response.status(202).json({ status: "cancellation-requested" }); } catch (error) { throw new HttpError(error instanceof Error ? error.message : "Unable to cancel source", 409); } });
+processingRouter.post("/documents/:documentId/queue", requireKnowledgeWrite, async (request, response) => { const { organizationId } = getWorkspaceRequest(request).workspace; try { const job = await processingEngine.queue(idOf(request.params.documentId), organizationId); response.status(202).json(job); } catch (error) { throw toProcessingHttpError(error, "Unable to queue source", 400); } });
+processingRouter.post("/documents/:documentId/reprocess", requireKnowledgeWrite, async (request, response) => { const { organizationId } = getWorkspaceRequest(request).workspace; try { const job = await processingEngine.reprocess(idOf(request.params.documentId), organizationId); response.status(202).json(job); } catch (error) { throw toProcessingHttpError(error, "Unable to reprocess source", 409); } });
+processingRouter.post("/documents/:documentId/retry", requireKnowledgeWrite, async (request, response) => { const { organizationId } = getWorkspaceRequest(request).workspace; const source = await sourceForDocument(idOf(request.params.documentId), organizationId); try { const job = await processingEngine.retry(source.id); await prisma.knowledgeSource.update({ where: { id: source.id }, data: { status: "Queued", progress: 5, failureReason: null } }); response.status(202).json(job); } catch (error) { throw toProcessingHttpError(error, "Unable to retry source", 409); } });
+processingRouter.post("/documents/:documentId/cancel", requireKnowledgeWrite, async (request, response) => { const { organizationId } = getWorkspaceRequest(request).workspace; const source = await sourceForDocument(idOf(request.params.documentId), organizationId); try { await processingEngine.cancel(source.id); response.status(202).json({ status: "cancellation-requested" }); } catch (error) { throw toProcessingHttpError(error, "Unable to cancel source", 409); } });
 processingRouter.get("/documents/:documentId/status", async (request, response) => { const { organizationId } = getWorkspaceRequest(request).workspace; const source = await prisma.knowledgeSource.findFirst({ where: { documentId: idOf(request.params.documentId), organizationId }, include: detailInclude }); if (!source) throw new HttpError("Processing source not found", 404); response.json(mapSource(source)); });
 processingRouter.get("/documents/:documentId/text", async (request, response) => { const { organizationId } = getWorkspaceRequest(request).workspace; const source = await sourceForDocument(idOf(request.params.documentId), organizationId); if (source.status !== "Completed") throw new HttpError("Extracted text is not available", 409); response.json({ sourceId: source.id, text: source.extractedText }); });
 processingRouter.get("/documents/:documentId/chunks", async (request, response) => { const { organizationId } = getWorkspaceRequest(request).workspace; const source = await sourceForDocument(idOf(request.params.documentId), organizationId); const chunks = await prisma.knowledgeChunk.findMany({ where: { sourceId: source.id }, orderBy: { chunkNumber: "asc" } }); response.json(chunks); });

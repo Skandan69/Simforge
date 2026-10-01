@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FormMessage } from "./form-message";
+import { safeNextPath } from "@/lib/safe-redirect";
 
 export function LoginForm({ next = "/dashboard", initialError }: { next?: string; initialError?: string }) {
   const router = useRouter();
@@ -32,7 +33,7 @@ export function LoginForm({ next = "/dashboard", initialError }: { next?: string
       return;
     }
 
-    router.push(next.startsWith("/") ? next : "/dashboard");
+    router.push(safeNextPath(next));
     router.refresh();
   }
 

@@ -25,6 +25,25 @@ export function canEvaluateSession(
   );
 }
 
+/**
+ * Decides whether a session may be (re-)evaluated.
+ * - In-progress sessions can be evaluated by the learner or staff.
+ * - Completed practice sessions can only be re-evaluated by staff.
+ * - Completed assessment sessions are final: nobody can re-grade them,
+ *   otherwise a learner could call /evaluate until the grader passes them.
+ */
+export function evaluationAllowance(
+  status: "IN_PROGRESS" | "COMPLETED" | "FAILED",
+  role: UserRole,
+  isAssessment: boolean,
+): { allowed: true; claimableStatuses: ("IN_PROGRESS" | "COMPLETED")[] } | { allowed: false; reason: "SESSION_FAILED" | "SESSION_ALREADY_EVALUATED" } {
+  if (status === "FAILED") return { allowed: false, reason: "SESSION_FAILED" };
+  const isStaff = (["Owner", "Admin", "Trainer"] as UserRole[]).includes(role);
+  if (status === "COMPLETED" && (isAssessment || !isStaff))
+    return { allowed: false, reason: "SESSION_ALREADY_EVALUATED" };
+  return { allowed: true, claimableStatuses: !isAssessment && isStaff ? ["IN_PROGRESS", "COMPLETED"] : ["IN_PROGRESS"] };
+}
+
 export function canStartSimulation(role: UserRole, status: SimulationStatus) {
   return status === "Active" ||
     (status === "Draft" && (["Owner", "Admin", "Trainer"] as UserRole[]).includes(role));

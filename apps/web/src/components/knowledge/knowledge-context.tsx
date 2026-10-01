@@ -31,7 +31,7 @@ export function KnowledgeProvider({ children }: { children: React.ReactNode }) {
     return () => { active = false; };
   }, []);
 
-  if (error) return <div className="grid min-h-96 place-items-center rounded-xl border bg-card p-8 text-center"><div><AlertTriangle className="mx-auto size-8 text-destructive" /><h2 className="mt-4 font-semibold">Knowledge Studio is unavailable</h2><p className="mt-2 text-sm text-muted-foreground">{error}</p><Button className="mt-5" onClick={() => void refresh()}><RefreshCw />Try again</Button></div></div>;
+  if (error) return <div className="grid min-h-96 place-items-center rounded-xl border bg-card p-8 text-center"><div><AlertTriangle className="mx-auto size-8 text-destructive" /><h2 className="mt-4 font-semibold">Knowledge Studio is unavailable</h2><p className="mt-2 text-sm text-muted-foreground">{error}</p><Button className="mt-5" onClick={() => void refresh().catch((caught: unknown) => setError(caught instanceof Error ? caught.message : "Unable to load Knowledge Studio."))}><RefreshCw />Try again</Button></div></div>;
   if (!dashboard) return <div className="grid min-h-96 place-items-center rounded-xl border bg-card"><div className="flex items-center gap-3 text-sm text-muted-foreground"><span className="size-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />Loading Knowledge Studio…</div></div>;
   return <KnowledgeContext.Provider value={{ dashboard, refresh }}>{children}</KnowledgeContext.Provider>;
 }

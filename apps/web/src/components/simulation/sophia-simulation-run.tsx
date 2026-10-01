@@ -66,6 +66,10 @@ export function SophiaSimulationRun({
   const audioRef = useRef<HTMLAudioElement | undefined>(undefined);
   const audioUrlRef = useRef<string | undefined>(undefined);
   const stopLipSyncRef = useRef<(() => void) | undefined>(undefined);
+  // Guards async voice work: set false on unmount, and each playback gets a token so a
+  // slow TTS response for an older message can never start playing over a newer one.
+  const mountedRef = useRef(true);
+  const playbackTokenRef = useRef(0);
   const [configuration, setConfiguration] =
     useState<SimulationRunConfiguration>();
   const [session, setSession] = useState<SimulationSessionResponse>();
@@ -76,7 +80,10 @@ export function SophiaSimulationRun({
   const [sending, setSending] = useState(false);
   const [evaluating, setEvaluating] = useState(false);
   const [voiceState, setVoiceState] = useState<VoiceState>("Ready");
-  const [mouthOpen, setMouthOpen] = useState(0);
+  const [mouthOpen, setMouthOpenRaw] = useState(0);
+  // Lip sync reports ~60 values/second; quantising lets React skip identical updates
+  // instead of re-rendering this whole screen on every animation frame.
+  const setMouthOpen = useCallback((value: number) => setMouthOpenRaw(Math.round(value * 12) / 12), []);
   const [recordingDurationMs, setRecordingDurationMs] = useState(0);
   const [voiceError, setVoiceError] = useState<string>();
   const [muted, setMuted] = useState(false);
@@ -124,13 +131,39 @@ export function SophiaSimulationRun({
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [conversation.length]);
-  useEffect(() => () => {
-    if (recordingTimerRef.current) window.clearInterval(recordingTimerRef.current);
-    recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
-    audioRef.current?.pause();
+  const stopPlayback = useCallback(() => {
+    playbackTokenRef.current += 1;
+    const player = audioRef.current;
+    if (player) {
+      player.onended = null;
+      player.onerror = null;
+      player.pause();
+      audioRef.current = undefined;
+    }
     stopLipSyncRef.current?.();
-    if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
+    stopLipSyncRef.current = undefined;
+    // Revoke only after the player that used it has been stopped.
+    if (audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current);
+      audioUrlRef.current = undefined;
+    }
   }, []);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (recordingTimerRef.current) window.clearInterval(recordingTimerRef.current);
+      const recorder = recorderRef.current;
+      if (recorder) {
+        // Detach onstop first so unmounting doesn't trigger a transcription request.
+        recorder.onstop = null;
+        recorder.ondataavailable = null;
+        if (recorder.state !== "inactive") recorder.stop();
+      }
+      recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+      stopPlayback();
+    };
+  }, [stopPlayback]);
   const start = useCallback(async () => {
     setStarting(true);
     setError(undefined);
@@ -167,6 +200,10 @@ export function SophiaSimulationRun({
 
   const playSophiaMessage = useCallback(async (messageId: string) => {
     if (!session || muted) return;
+    // Stop whatever Sophia is currently saying before starting the next line.
+    stopPlayback();
+    const token = playbackTokenRef.current;
+    const isCurrent = () => mountedRef.current && playbackTokenRef.current === token;
     setVoiceError(undefined);
     try {
       setVoiceState("Speaking");
@@ -174,33 +211,39 @@ export function SophiaSimulationRun({
         method: "POST",
         body: JSON.stringify({ messageId }),
       });
-      if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
+      if (!isCurrent()) return;
       const url = URL.createObjectURL(audio);
       audioUrlRef.current = url;
       const player = new Audio(url);
       audioRef.current = player;
-      stopLipSyncRef.current?.();
-      stopLipSyncRef.current = await startSophiaLipSync(player, setMouthOpen);
+      const stopLipSync = await startSophiaLipSync(player, setMouthOpen);
+      if (!isCurrent()) {
+        stopLipSync();
+        return;
+      }
+      stopLipSyncRef.current = stopLipSync;
       player.onended = () => {
         stopLipSyncRef.current?.();
         stopLipSyncRef.current = undefined;
-        setVoiceState("Ready");
+        if (mountedRef.current) setVoiceState("Ready");
       };
       player.onerror = () => {
         stopLipSyncRef.current?.();
         stopLipSyncRef.current = undefined;
+        if (!mountedRef.current) return;
         setVoiceState("Error");
         setVoiceError("Sophia audio could not be played. Her text response is still available.");
       };
       await player.play();
-      setLastSophiaMessageId(messageId);
+      if (isCurrent()) setLastSophiaMessageId(messageId);
     } catch (caught) {
+      if (!isCurrent()) return;
       stopLipSyncRef.current?.();
       stopLipSyncRef.current = undefined;
       setVoiceState("Error");
       setVoiceError(caught instanceof Error ? caught.message : "Sophia audio is unavailable. Continue with text.");
     }
-  }, [muted, session]);
+  }, [muted, session, setMouthOpen, stopPlayback]);
 
   const transcribeRecording = useCallback(async (audio: Blob, durationMs: number) => {
     if (!session) return;
@@ -214,9 +257,11 @@ export function SophiaSimulationRun({
         headers: { "Content-Type": audio.type || "audio/webm", "X-Audio-Duration-Ms": String(durationMs) },
         body: audio,
       });
+      if (!mountedRef.current) return;
       setContent(result.transcript);
       setVoiceState("Ready");
     } catch (caught) {
+      if (!mountedRef.current) return;
       setVoiceState("Error");
       setVoiceError(caught instanceof Error ? caught.message : "The recording could not be transcribed. Try again or use text.");
     }
@@ -268,15 +313,12 @@ export function SophiaSimulationRun({
   }
 
   function toggleMute() {
-    setMuted((current) => {
-      if (!current) {
-        audioRef.current?.pause();
-        stopLipSyncRef.current?.();
-        stopLipSyncRef.current = undefined;
-        setVoiceState("Ready");
-      }
-      return !current;
-    });
+    // Side effects stay outside the state updater (React may run updaters twice).
+    if (!muted) {
+      stopPlayback();
+      setVoiceState("Ready");
+    }
+    setMuted(!muted);
   }
   async function send(event: React.FormEvent) {
     event.preventDefault();
@@ -300,6 +342,8 @@ export function SophiaSimulationRun({
       setVoiceState("Ready");
       if (!muted) void playSophiaMessage(pair.aiMessage.id);
     } catch (caught) {
+      // Don't leave the avatar stuck on "Thinking" after a failed send.
+      setVoiceState("Ready");
       setError(
         caught instanceof Error
           ? caught.message
@@ -318,6 +362,11 @@ export function SophiaSimulationRun({
       await apiFetch<SimulationSessionResponse>(endpoint, { method: "POST" });
       router.push(`/simulation-studio/sessions/${session.id}/report`);
     } catch (caught) {
+      // Already graded (e.g. double click or a second tab): just open the report.
+      if (caught instanceof ApiError && caught.code === "SESSION_ALREADY_EVALUATED") {
+        router.push(`/simulation-studio/sessions/${session.id}/report`);
+        return;
+      }
       const failure =
         caught instanceof ApiError
           ? {

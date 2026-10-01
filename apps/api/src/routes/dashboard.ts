@@ -22,7 +22,7 @@ dashboardRouter.get("/", requireAuth, async (request, response) => {
     return;
   }
 
-  const [users, knowledgeBases, simulations, activities, blueprint]: [number, number, number, Array<{
+  const [users, knowledgeBases, simulations, assessments, activities, blueprint]: [number, number, number, number, Array<{
     id: string;
     action: string;
     description: string;
@@ -32,6 +32,7 @@ dashboardRouter.get("/", requireAuth, async (request, response) => {
     prisma.membership.count({ where: { organizationId: membership.organizationId } }),
     prisma.knowledgeBase.count({ where: { organizationId: membership.organizationId, status: "Active" } }),
     prisma.simulation.count({ where: { organizationId: membership.organizationId } }),
+    prisma.assessment.count({ where: { organizationId: membership.organizationId } }),
     prisma.activity.findMany({
       where: { organizationId: membership.organizationId },
       take: 8,
@@ -48,7 +49,7 @@ dashboardRouter.get("/", requireAuth, async (request, response) => {
       users,
       knowledgeBases,
       simulations,
-      assessments: 0,
+      assessments,
     },
     recentActivity: activities.map((activity) => ({
       id: activity.id,

@@ -18,3 +18,16 @@ export async function downloadKnowledgeFile(path: string) {
   if (error) throw new Error(`Storage download failed: ${error.message}`);
   return Buffer.from(await data.arrayBuffer());
 }
+
+/**
+ * Confirms an uploaded object really exists in private storage and returns its
+ * true size, so the API never trusts the size/type a browser reports.
+ */
+export async function verifyUploadedKnowledgeFile(path: string, maxBytes: number) {
+  const { data, error } = await supabaseAdmin.storage.from(KNOWLEDGE_DOCUMENT_BUCKET).info(path);
+  if (error || !data) return { ok: false as const, reason: "NOT_FOUND" as const };
+  const size = typeof data.size === "number" ? data.size : Number(data.metadata?.size ?? NaN);
+  if (!Number.isFinite(size) || size <= 0) return { ok: false as const, reason: "NOT_FOUND" as const };
+  if (size > maxBytes) return { ok: false as const, reason: "TOO_LARGE" as const, size };
+  return { ok: true as const, size };
+}

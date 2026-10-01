@@ -5,7 +5,42 @@ import mammoth from "mammoth";
 import type { DocumentFileType } from "@simforge/shared";
 import type { ExtractedBlock, ExtractionResult, SourceExtractor } from "./types.js";
 
-function assertZip(buffer: Buffer) { if (buffer.subarray(0, 2).toString() !== "PK") throw new Error("Invalid Open XML file"); }
+export const OPEN_XML_LIMITS = { maxEntries: 20_000, maxUncompressedBytes: 500 * 1024 * 1024 } as const;
+export const MAX_PDF_PAGES = 2_000;
+
+/**
+ * Reads the ZIP central directory (without decompressing anything) and rejects
+ * archives whose declared uncompressed size or entry count is unreasonable.
+ * This stops "zip bombs" - tiny uploads that expand to gigabytes in memory.
+ */
+export function inspectZipArchive(buffer: Buffer, limits: { maxEntries: number; maxUncompressedBytes: number } = OPEN_XML_LIMITS) {
+  const EOCD = 0x06054b50; const CENTRAL = 0x02014b50;
+  const searchStart = Math.max(0, buffer.length - (22 + 0xffff));
+  let eocd = -1;
+  for (let offset = buffer.length - 22; offset >= searchStart; offset--) {
+    if (buffer.readUInt32LE(offset) === EOCD) { eocd = offset; break; }
+  }
+  if (eocd < 0) throw new Error("Invalid Open XML file");
+  const entries = buffer.readUInt16LE(eocd + 10);
+  const directoryOffset = buffer.readUInt32LE(eocd + 16);
+  if (entries === 0xffff || directoryOffset === 0xffffffff) throw new Error("Document archive is too large to process");
+  if (entries > limits.maxEntries) throw new Error("Document contains too many embedded files to process safely");
+  let offset = directoryOffset; let total = 0;
+  for (let index = 0; index < entries; index++) {
+    if (offset + 46 > buffer.length || buffer.readUInt32LE(offset) !== CENTRAL) throw new Error("Invalid Open XML file");
+    const uncompressed = buffer.readUInt32LE(offset + 24);
+    if (uncompressed === 0xffffffff) throw new Error("Document archive is too large to process");
+    total += uncompressed;
+    if (total > limits.maxUncompressedBytes) throw new Error("Document expands to more content than can be processed safely");
+    offset += 46 + buffer.readUInt16LE(offset + 28) + buffer.readUInt16LE(offset + 30) + buffer.readUInt16LE(offset + 32);
+  }
+  return { entries, uncompressedBytes: total };
+}
+
+function assertZip(buffer: Buffer) {
+  if (buffer.length < 22 || buffer.subarray(0, 2).toString() !== "PK") throw new Error("Invalid Open XML file");
+  inspectZipArchive(buffer);
+}
 function decodeXml(value: string) { return value.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'"); }
 
 const docx: SourceExtractor = {
@@ -63,7 +98,9 @@ const pdf: SourceExtractor = {
   validate(buffer) { if (buffer.subarray(0, 5).toString() !== "%PDF-") throw new Error("Invalid PDF file"); },
   async extract(buffer) {
     const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-    const document = await pdfjs.getDocument({ data: new Uint8Array(buffer), useWorkerFetch: false }).promise;
+    const loadingTask = pdfjs.getDocument({ data: new Uint8Array(buffer), useWorkerFetch: false });
+    const document = await loadingTask.promise;
+    if (document.numPages > MAX_PDF_PAGES) { await loadingTask.destroy(); throw new Error(`PDF has more than ${MAX_PDF_PAGES} pages and cannot be processed`); }
     const pages: string[] = [];
     const blocks: ExtractedBlock[] = [];
     for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber++) {
