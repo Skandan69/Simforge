@@ -28,6 +28,7 @@ import { myPracticeRouter } from "./routes/my-practice.js";
 import { assessmentsRouter } from "./routes/assessments.js";
 import { myAssessmentsRouter } from "./routes/my-assessments.js";
 import { developmentPathsRouter, myDevelopmentRouter } from "./routes/development-paths.js";
+import { membersRouter } from "./routes/members.js";
 import { getAIProviderStatus } from "./ai/provider.js";
 import { getVoiceProviderStatus } from "./ai/voice-provider.js";
 import { getEmbeddingProviderStatus } from "./ai/embedding-provider.js";
@@ -97,6 +98,7 @@ app.get("/health/details", (request, response) => {
 
 app.use("/api/me", meRouter);
 app.use("/api/organizations", organizationsRouter);
+app.use("/api/members", membersRouter);
 app.use("/api/organization-blueprint", organizationBlueprintRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/knowledge-bases", knowledgeBasesRouter);
