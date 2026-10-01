@@ -1,36 +1,81 @@
-# Architecture notes
+# SimForge architecture
 
-## Repository shape
+## Shape
 
-SimForge uses npm workspaces to keep deployable applications and reusable code in one repository.
+SimForge is an npm-workspaces TypeScript monorepo:
 
-- `apps/web` owns the browser experience.
-- `apps/api` owns HTTP endpoints and future application services.
-- `packages/shared` owns stable cross-application types and constants.
-- `database/prisma` owns the database schema and migrations.
+- `apps/web`: Next.js browser experience.
+- `apps/api`: Express API, AI orchestration and processing runtime.
+- `packages/shared`: stable cross-app types/constants.
+- `database/prisma`: schema and migrations.
+- `database/supabase`: storage and security setup.
 
-## Runtime boundaries
+## Trust boundary
 
-The web app and API are independently deployable. The web app communicates with the API over authenticated HTTP. The API verifies Supabase bearer tokens and owns Prisma database access; browser code never receives database credentials.
+```text
+Browser
+  ↓ Supabase session / bearer token
+Next.js
+  ↓ authenticated HTTP
+Express API
+  ↓ tenant + role authorization
+Prisma
+  ↓
+Supabase PostgreSQL / Storage
+```
 
-## Identity and authorization
+The browser does not receive database credentials or the service-role key. Protected Next.js routes improve UX, but the Express API is the authorization boundary and revalidates every protected request.
 
-Supabase Auth owns email/password identities, verification, password recovery, and cookie-backed web sessions. Prisma stores application profiles and organization membership. Every organization is created with an Owner membership; the role enum also includes Admin, Trainer, Manager, and Learner.
+## Identity and tenancy
 
-Protected Next.js route groups verify the Supabase user on the server. The Express API independently verifies the access token on every protected request, so UI route protection is never treated as an authorization boundary.
+Supabase Auth owns identity. `Profile` and `Membership` map authenticated users into one organization and one of five roles:
 
-## Database connectivity
+- Owner
+- Admin
+- Trainer
+- Manager
+- Learner
 
-Supabase PostgreSQL provides persistence. Application traffic uses the pooled connection string, while Prisma migrations use the direct connection string configured in `prisma.config.ts`. Supabase Storage holds optional organization logos with a per-user upload policy.
+Owner/Admin member-management APIs use Supabase Admin invitations plus server-side Profile/Membership writes. Role changes/removals invalidate cached workspace authorization immediately.
 
-## Intentional omissions
+All business queries are organization-scoped. API-owned tables exposed through the public schema are hardened with RLS and revoked direct `anon`/`authenticated` privileges so trusted server access remains the intended path.
 
-Simulation Studio, assessment workflows, invitations, queues, caching, observability vendors, and deployment providers are deliberately deferred until requirements justify them.
+## Knowledge
 
-## Knowledge Studio foundation
+Knowledge Studio stores private originals in Supabase Storage and governed metadata in PostgreSQL.
 
-Knowledge Studio stores governed metadata in PostgreSQL and original files in a private Supabase Storage bucket. The hierarchy is Organization → Knowledge Base → Document → Document Version. Owner, Admin, and Trainer roles can mutate knowledge content; Manager and Learner roles are read-only in both the API and Storage policies.
+Processing validates source signatures and actual byte size, extracts PDF/DOCX/PPTX/XLSX content, applies archive/PDF safety limits, creates chunks, and records recoverable job state. Stale processing work can be safely recovered.
 
-Uploads travel directly from the authenticated browser to Supabase Storage so the UI can report byte-level progress. The Express API validates the organization-scoped storage path and persists metadata only after Storage accepts the file. Deletion is coordinated by the API with a server-only service-role key so database rows and every stored version are removed together.
+Knowledge retrieval combines lexical and vector evidence, supports governed version lifecycle, and returns machine-controlled citations/no-answer behavior.
 
-No document contents are parsed. Search uses PostgreSQL metadata fields only, and the schema intentionally has no embeddings, chunks, AI indexes, prompts, or conversations.
+## Simulation and capability runtime
+
+Simulation Studio stores scenarios, personas, objectives, linked knowledge and evaluation criteria.
+
+Sophia runtime creates tenant-scoped sessions/messages and can use text or voice AI. Evaluation is idempotent/transactional so a completed session cannot be silently regraded. Evaluations feed:
+
+- CapabilityScore
+- LearnerCapabilityProfile
+- CapabilityAssessmentHistory
+- SimulationCoachingInsight
+
+## Orchestration
+
+Manager Intelligence reads capability/evaluation evidence and supports PracticeAssignment.
+
+Assessment Studio reuses SimulationSession/Evaluation rather than creating a separate scoring engine.
+
+Development Paths orchestrate ordered PRACTICE and ASSESSMENT steps and derive progress from underlying evidence rather than manual completion flags.
+
+Reports reuse Manager Intelligence evidence instead of introducing a separate analytics store for the pilot.
+
+## Operations
+
+- Render hosts the existing production API.
+- Vercel hosts the existing production web app.
+- GitHub Actions validates Prisma generation, typecheck, lint, tests, build, diff integrity and critical dependency audit.
+- public `/health` is intentionally minimal.
+- protected `/health/details` exposes provider/deployment diagnostics only when the configured token is supplied.
+- API and AI-cost endpoints have per-user rate limits.
+
+The platform intentionally avoids extra permanent per-sprint services. Staging validates release candidates; successful work merges back into the existing production SimForge.

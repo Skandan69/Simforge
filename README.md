@@ -1,38 +1,65 @@
 # SimForge
 
-SimForge is an enterprise simulation-training platform foundation built as a TypeScript monorepo. It includes Supabase authentication, organization workspaces, role-aware access, governed knowledge processing, and Simulation Studio scenario configuration.
+SimForge is an AI Workforce Intelligence Platform that turns governed organization knowledge into practice, assessments, coaching, development paths, and measurable capability improvement.
 
-Simulation Studio lets trainers configure structured scenarios, personas, objectives, linked knowledge, and evaluation criteria. It does not run conversations, attempts, scoring, coaching, or analytics. The Knowledge Processing Engine remains deterministic and contains no AI, embeddings, vector storage, RAG, summaries, or generated content.
+The production workflow is:
 
-## Repository structure
+**Organization Blueprint → Knowledge Studio → Knowledge Intelligence → Learning Factory → Simulation / Sophia → Evaluation → AI Coach → Capability Profile → Manager Intelligence → Practice / Assessment / Development Paths → Reports**
+
+## Repository
 
 ```text
 apps/
-  web/          Next.js 16, Tailwind CSS 4, shadcn/ui, Supabase SSR
-  api/          Express 5, Supabase token verification, Prisma
+  web/          Next.js 16 browser application
+  api/          Express 5 API and AI/runtime services
 database/
-  prisma/       Schema and foundation migration
-  supabase/     Storage bucket and policy setup
+  prisma/       Prisma schema and migrations
+  supabase/     Storage/RLS setup scripts
 packages/
-  shared/       Shared contracts, roles, and constants
-docs/           Product and architecture notes
+  shared/       Shared contracts, constants, roles
+docs/           Architecture, product, and release notes
 ```
 
-## Prerequisites
+## Runtime
 
-- Node.js 20.9 or newer
-- A Supabase project with email/password authentication enabled
-- Supabase PostgreSQL connection strings
+- Node.js 22.13+
+- Supabase Auth, PostgreSQL, Storage
+- Prisma 7
+- OpenAI-compatible AI, embeddings, transcription and speech providers
+- Next.js web app
+- Express API
+
+The browser authenticates with Supabase. All tenant-sensitive application data is accessed through the SimForge API, which independently verifies the bearer token and organization membership.
+
+## Product capabilities
+
+- Organization onboarding and Blueprint
+- Owner/Admin workspace member administration and invitations
+- Knowledge Studio for PDF, DOCX, PPTX and XLSX
+- resilient processing, chunking, embeddings and governed version lifecycle
+- hybrid knowledge retrieval and grounded Ask Sophia with citations/no-answer behavior
+- Learning Factory draft generation and approved simulation publishing
+- Simulation Studio, personas, objectives and evaluation criteria
+- Sophia AI roleplay with text/voice runtime
+- evaluation, capability scores, AI Coach and premium reports
+- learner Capability Profile and history
+- Manager Intelligence and practice assignment
+- My Practice
+- Assessment Studio and My Assessments
+- Development Paths and My Development
+- evidence-derived manager Reports with CSV export
+
+SimForge is intentionally **not** an LMS. It does not attempt to provide SCORM delivery, course catalogs, attendance, or generic content hosting as the core product.
 
 ## Local setup
 
-1. Install dependencies from the repository root:
+1. Install dependencies:
 
    ```bash
-   npm install
+   npm ci
    ```
 
-2. Copy the environment templates:
+2. Copy environment templates:
 
    ```bash
    cp .env.example .env
@@ -40,67 +67,52 @@ docs/           Product and architecture notes
    cp apps/web/.env.example apps/web/.env.local
    ```
 
-3. Add your Supabase project URL and publishable key to both app environment files. Add the pooled PostgreSQL URL to `DATABASE_URL` and the direct URL to `DIRECT_URL` in the root `.env`.
+3. Configure Supabase/PostgreSQL and server-only provider keys.
 
-4. Apply the database migration:
+4. Generate Prisma Client and apply migrations to the intended development database:
 
    ```bash
+   npm run db:generate
    npm run db:migrate
    ```
 
-5. Run [`database/supabase/storage.sql`](database/supabase/storage.sql), [`database/supabase/knowledge-storage.sql`](database/supabase/knowledge-storage.sql), [`database/supabase/processing-rls.sql`](database/supabase/processing-rls.sql), and [`database/supabase/simulation-rls.sql`](database/supabase/simulation-rls.sql) in the Supabase SQL editor. These configure private storage and keep processing and simulation tables accessible only through the authenticated API.
-
-6. In Supabase Authentication URL Configuration, add these local redirect URLs:
-
-   ```text
-   http://localhost:3000/auth/callback
-   http://localhost:3000/reset-password
-   ```
-
-   Configure a custom SMTP provider before production use so confirmation and password-recovery emails are delivered reliably.
-
-7. Start both applications:
+5. Start the platform:
 
    ```bash
    npm run dev
    ```
 
-The web app runs at `http://localhost:3000`, the API at `http://localhost:4000`, and the health check at `http://localhost:4000/health`.
+Web: `http://localhost:3000`  
+API: `http://localhost:4000`  
+Health: `http://localhost:4000/health`
 
-## Commands
+## Validation
 
-| Command | Purpose |
-| --- | --- |
-| `npm run dev` | Run shared types, web, and API in watch mode |
-| `npm run dev:web` | Run only the Next.js app |
-| `npm run dev:api` | Run only the Express API |
-| `npm run build` | Generate Prisma Client and build every workspace |
-| `npm run typecheck` | Type-check every workspace |
-| `npm run lint` | Lint workspaces that define linting |
-| `npm run db:validate` | Validate the Prisma schema |
-| `npm run db:generate` | Generate the Prisma client |
-| `npm run db:migrate` | Apply development migrations |
+```bash
+npm run db:validate
+npm run db:generate
+npm run typecheck
+npm run lint
+npm test
+npm run build
+git diff --check
+```
 
-## Authentication and first login
+GitHub CI runs the same release gates on pull requests to `main`.
 
-Registration uses Supabase’s email-confirmation flow. After the first successful login, SimForge creates the user profile lazily and routes the user to organization setup. Organization creation assigns the creator the `Owner` role. The remaining supported roles are `Admin`, `Trainer`, `Manager`, and `Learner`.
+## Security boundaries
 
-All workspace pages are protected in Next.js, and the API independently validates the Supabase access token before returning organization data.
+- Supabase Auth owns identity.
+- Prisma Membership owns organization authorization.
+- API routes enforce role and tenant scope server-side.
+- API-owned public-schema tables use RLS/grant hardening to prevent direct anonymous/authenticated Data API access.
+- service-role credentials and AI keys stay server-side.
+- uploads are signature/size validated and document processing applies archive/PDF safety limits.
+- AI-cost routes are rate-limited.
+- public `/health` exposes liveness only; detailed diagnostics require the health token.
 
-## Knowledge Studio
+## Deployment
 
-Knowledge Studio supports multiple departmental knowledge bases, PDF/DOCX/PPTX/XLSX uploads up to 50 MB, real upload progress, notes, version replacement, private downloads, archiving, deletion, and metadata search. Owner, Admin, and Trainer can make changes. Manager and Learner are read-only.
+The API is deployed to the existing Render production service and the web app to the existing Vercel production project. New feature work must be validated on staging and then merged into the same production SimForge rather than creating parallel permanent applications.
 
-Add `SUPABASE_SERVICE_ROLE_KEY` only to the API environment. It is used for trusted Storage cleanup and must never be exposed through a `NEXT_PUBLIC_` variable.
-
-## Knowledge Processing Engine
-
-Every new or replaced PDF, DOCX, PPTX, or XLSX file is queued automatically. The API worker downloads the private source, validates its signature, extracts plain text, captures document metadata, splits text into configurable internal chunks, and records progress and failures. Processing can be cancelled, retried, or rerun from Knowledge Studio.
-
-The source-centric `KnowledgeSource` and `KnowledgeChunk` contracts are independent of the UI. Future Simulation Studio and AI services should consume completed chunks through the processing API rather than reading uploaded files directly. Future source types are represented in the schema for websites, media, OCR, SharePoint, Confluence, and APIs, but their adapters are intentionally deferred.
-
-## Simulation Studio
-
-Owners, Admins, and Trainers can build, edit, duplicate, archive, and delete simulations through a guided six-step builder. Managers can browse and preview simulations, while Learners are excluded until learner attempts are introduced. Reusable personas and evaluation criteria are organization-scoped, and each simulation update creates an immutable configuration snapshot.
-
-Simulation Studio consumes linked Knowledge Base references only. Live roleplay, AI conversations, scoring, coaching, learner attempts, and analytics are intentionally outside this foundation sprint.
+See `docs/architecture.md` and `docs/product.md` for the current product and architecture boundaries.
