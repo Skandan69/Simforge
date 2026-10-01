@@ -28,6 +28,31 @@ export interface CurrentUserResponse {
   role: UserRole | null;
 }
 
+export interface WorkspaceMember {
+  membershipId: string;
+  userId: string;
+  email: string;
+  fullName: string | null;
+  role: UserRole;
+  joinedAt: string;
+}
+
+export interface WorkspaceMembersResponse {
+  canManageMembers: boolean;
+  assignableRoles: UserRole[];
+  members: WorkspaceMember[];
+}
+
+export interface InviteWorkspaceMemberInput {
+  email: string;
+  fullName?: string;
+  role: Exclude<UserRole, "Owner">;
+}
+
+export interface UpdateWorkspaceMemberRoleInput {
+  role: Exclude<UserRole, "Owner">;
+}
+
 export interface DashboardActivity {
   id: string;
   action: string;
