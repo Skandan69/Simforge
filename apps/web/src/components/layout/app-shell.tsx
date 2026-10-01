@@ -57,7 +57,7 @@ export function AppShell({ children, user }: AppShellProps) {
 
   return (
     <div className="min-h-screen bg-muted/30">
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex"><Brand /><Navigation /><div className="m-4 rounded-xl border bg-background/50 p-4"><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Workspace</p><p className="mt-2 truncate text-sm font-medium">Enterprise foundation</p><p className="mt-1 text-xs text-muted-foreground">Sprint 1</p></div></aside>
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex"><Brand /><Navigation /><div className="m-4 rounded-xl border bg-background/50 p-4"><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Workspace</p><p className="mt-2 truncate text-sm font-medium">AI Workforce Intelligence</p><p className="mt-1 text-xs text-muted-foreground">Production workspace</p></div></aside>
 
       {mobileOpen && <div className="fixed inset-0 z-40 bg-black/45 backdrop-blur-sm md:hidden" onClick={() => setMobileOpen(false)} />}
       <aside className={cn("fixed inset-y-0 left-0 z-50 flex w-[min(82vw,19rem)] flex-col border-r bg-sidebar shadow-2xl transition-transform md:hidden", mobileOpen ? "translate-x-0" : "-translate-x-full")}><div className="flex items-center justify-between"><Brand /><Button variant="ghost" size="icon" className="mr-3" onClick={() => setMobileOpen(false)} aria-label="Close navigation"><X /></Button></div><Navigation onNavigate={() => setMobileOpen(false)} /></aside>
