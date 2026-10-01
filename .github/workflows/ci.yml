@@ -40,7 +40,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
 
       - name: Install
@@ -48,6 +48,9 @@ jobs:
 
       - name: Prisma validate
         run: npm run db:validate
+
+      - name: Prisma generate
+        run: npm run db:generate
 
       - name: Typecheck
         run: npm run typecheck
@@ -63,3 +66,6 @@ jobs:
 
       - name: Diff check
         run: git diff --check
+
+      - name: Dependency audit
+        run: npm audit --audit-level=critical
