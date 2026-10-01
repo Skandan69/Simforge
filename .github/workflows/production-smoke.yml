@@ -38,20 +38,11 @@ jobs:
 
           for attempt in {1..12}; do
             : > "$body_file"
-            http_code=$(curl -sS               --max-time 20               -o "$body_file"               -w "%{http_code}"               https://simforge-updz.onrender.com/health)
+            http_code=$(curl -sS --max-time 20 -o "$body_file" -w "%{http_code}" https://simforge-updz.onrender.com/health)
             curl_exit=$?
 
             if [ "$curl_exit" -eq 0 ] && [ "$http_code" = "200" ]; then
-              node - "$body_file" <<'NODE'
-const fs = require("fs");
-const path = process.argv[2];
-try {
-  const body = JSON.parse(fs.readFileSync(path, "utf8"));
-  if (body.status !== "ok" || body.service !== "simforge-api") process.exit(1);
-} catch {
-  process.exit(1);
-}
-NODE
+              node -e 'const fs=require("fs");try{const body=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));if(body.status!=="ok"||body.service!=="simforge-api")process.exit(1)}catch{process.exit(1)}' "$body_file"
               if [ "$?" -eq 0 ]; then
                 passed=true
                 break
@@ -91,14 +82,15 @@ NODE
           set +e
           body_file=/tmp/simforge-web-body.txt
           diag_file=/tmp/simforge-web-diagnostic.txt
-          http_code=$(curl -sS -L             --retry 3             --retry-all-errors             --retry-delay 5             --max-time 30             -o "$body_file"             -w "%{http_code}"             https://simforge-web-pi.vercel.app/login)
+          http_code=$(curl -sS -L --retry 3 --retry-all-errors --retry-delay 5 --max-time 30 -o "$body_file" -w "%{http_code}" https://simforge-web-pi.vercel.app/login)
           curl_exit=$?
 
           {
             echo "endpoint=https://simforge-web-pi.vercel.app/login"
             echo "curl_exit=$curl_exit"
             echo "http_code=$http_code"
-            echo "response_bytes=$(wc -c < "$body_file" 2>/dev/null || echo 0)"
+            bytes=$(wc -c < "$body_file" 2>/dev/null || echo 0)
+            echo "response_bytes=$bytes"
           } > "$diag_file"
 
           if [ "$curl_exit" -eq 0 ] && [ "$http_code" = "200" ] && [ -s "$body_file" ]; then
@@ -121,12 +113,12 @@ NODE
         run: |
           set -euo pipefail
           title="[Production Smoke] SimForge availability failure"
-          existing=$(gh issue list             --repo "${GITHUB_REPOSITORY}"             --state open             --limit 100             --json number,title             --jq ".[] | select(.title == \"$title\") | .number"             | head -n 1)
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 100 --json number,title --jq ".[] | select(.title == \"$title\") | .number" | head -n 1)
 
           if [ "$API_OUTCOME" = "success" ] && [ "$WEB_OUTCOME" = "success" ]; then
             if [ -n "$existing" ]; then
-              gh issue comment "$existing"                 --repo "${GITHUB_REPOSITORY}"                 --body "Production smoke recovered successfully on commit `$HEAD_SHA`."
-              gh issue close "$existing" --repo "${GITHUB_REPOSITORY}" --reason completed
+              gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "Production smoke recovered successfully on commit $HEAD_SHA."
+              gh issue close "$existing" --repo "$GITHUB_REPOSITORY" --reason completed
             fi
             exit 0
           fi
@@ -134,10 +126,10 @@ NODE
           {
             echo "Automated production smoke failed."
             echo
-            echo "- Commit: `$HEAD_SHA`"
-            echo "- API outcome: `$API_OUTCOME`"
-            echo "- Web outcome: `$WEB_OUTCOME`"
-            echo "- Checked at: `$(date -u +%Y-%m-%dT%H:%M:%SZ)`"
+            echo "Commit: $HEAD_SHA"
+            echo "API outcome: $API_OUTCOME"
+            echo "Web outcome: $WEB_OUTCOME"
+            echo "Checked at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
             echo
             echo "### API diagnostic"
             echo '~~~text'
@@ -151,9 +143,9 @@ NODE
           } > /tmp/smoke-issue.md
 
           if [ -n "$existing" ]; then
-            gh issue comment "$existing"               --repo "${GITHUB_REPOSITORY}"               --body-file /tmp/smoke-issue.md
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body-file /tmp/smoke-issue.md
           else
-            gh issue create               --repo "${GITHUB_REPOSITORY}"               --title "$title"               --body-file /tmp/smoke-issue.md
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body-file /tmp/smoke-issue.md
           fi
 
       - name: Enforce smoke result
