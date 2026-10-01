@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
 import type { UserRole, WorkspaceMember, WorkspaceMembersResponse } from "@simforge/shared";
-import type { AuthenticatedRequest } from "../middleware/auth.js";
 import { requireAuth } from "../middleware/auth.js";
 import { getWorkspaceRequest, invalidateWorkspaceCache, requireWorkspace } from "../middleware/workspace.js";
 import { getEnv } from "../config/env.js";
@@ -59,7 +58,7 @@ membersRouter.get("/", async (request, response) => {
 });
 
 membersRouter.post("/invite", async (request, response) => {
-  const actor = (request as AuthenticatedRequest).authUser;
+  const actor = getWorkspaceRequest(request).authUser;
   const { organizationId, role: actorRole } = getWorkspaceRequest(request).workspace;
   const input = inviteMemberSchema.parse(request.body);
   if (!canAssignMemberRole(actorRole, input.role))
@@ -139,7 +138,7 @@ membersRouter.post("/invite", async (request, response) => {
 });
 
 membersRouter.patch("/:membershipId/role", async (request, response) => {
-  const actor = (request as AuthenticatedRequest).authUser;
+  const actor = getWorkspaceRequest(request).authUser;
   const { organizationId, role: actorRole } = getWorkspaceRequest(request).workspace;
   const input = updateRoleSchema.parse(request.body);
   const target = await prisma.membership.findFirst({
@@ -171,7 +170,7 @@ membersRouter.patch("/:membershipId/role", async (request, response) => {
 });
 
 membersRouter.delete("/:membershipId", async (request, response) => {
-  const actor = (request as AuthenticatedRequest).authUser;
+  const actor = getWorkspaceRequest(request).authUser;
   const { organizationId, role: actorRole } = getWorkspaceRequest(request).workspace;
   const target = await prisma.membership.findFirst({
     where: { id: request.params.membershipId, organizationId },
