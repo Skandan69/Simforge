@@ -22,6 +22,11 @@ export class TtlCache<K, V> {
     this.values.set(key, { expiresAt: Date.now() + this.ttlMs, value });
   }
 
+  delete(key: K) {
+    this.values.delete(key);
+    this.pending.delete(key);
+  }
+
   async getOrSet(key: K, loader: () => Promise<V>) {
     const cached = this.get(key);
     if (cached) return cached;
