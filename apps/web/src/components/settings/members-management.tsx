@@ -27,7 +27,15 @@ export function MembersManagement() {
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    let active = true;
+    void apiFetch<WorkspaceMembersResponse>("/api/members")
+      .then((result) => { if (active) setData(result); })
+      .catch((caught: unknown) => {
+        if (active) setError(caught instanceof Error ? caught.message : "Unable to load workspace members.");
+      });
+    return () => { active = false; };
+  }, []);
 
   async function invite(event: React.FormEvent) {
     event.preventDefault();
