@@ -21,7 +21,15 @@ export function ReportsView() {
     }
   }
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    let active = true;
+    void apiFetch<ManagerIntelligenceOverviewResponse>("/api/manager-intelligence")
+      .then((result) => { if (active) setData(result); })
+      .catch((caught: unknown) => {
+        if (active) setError(caught instanceof Error ? caught.message : "Unable to load reports.");
+      });
+    return () => { active = false; };
+  }, []);
 
   function downloadCsv() {
     if (!data) return;
