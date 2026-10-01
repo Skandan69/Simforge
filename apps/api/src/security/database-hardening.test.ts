@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   API_OWNED_SECURITY_TABLES,
@@ -7,51 +8,24 @@ import {
   securityHardeningStatements,
 } from "./database-hardening.js";
 
-test("production hardening covers every Prisma business table", () => {
-  const expectedTables = [
-    "Profile",
-    "Organization",
-    "OrganizationBlueprint",
-    "KnowledgeBase",
-    "Simulation",
-    "SimulationPersona",
-    "SimulationObjective",
-    "SimulationEvaluationCriterion",
-    "SimulationCriterionLink",
-    "SimulationKnowledgeBase",
-    "SimulationVersion",
-    "SimulationSession",
-    "PracticeAssignment",
-    "Assessment",
-    "AssessmentAssignment",
-    "AssessmentAttempt",
-    "DevelopmentPath",
-    "DevelopmentPathStep",
-    "DevelopmentPathAssignment",
-    "DevelopmentPathStepProgress",
-    "SimulationCoachingInsight",
-    "LearnerCapabilityProfile",
-    "LearnerCapability",
-    "CapabilityAssessmentHistory",
-    "SimulationMessage",
-    "SimulationEvaluation",
-    "CapabilityScore",
-    "Document",
-    "LearningFactoryDraft",
-    "KnowledgeSource",
-    "KnowledgeIntelligenceSection",
-    "ProcessingJob",
-    "KnowledgeChunk",
-    "KnowledgeChunkEmbedding",
-    "ProcessingLog",
-    "DocumentVersion",
-    "Membership",
-    "Activity",
-  ];
+function prismaModelNames() {
+  const schema = readFileSync(
+    new URL("../../../../database/prisma/schema.prisma", import.meta.url),
+    "utf8",
+  );
+  return [...schema.matchAll(/^model\s+(\w+)\s*\{/gm)].map((match) => match[1]);
+}
 
-  assert.deepEqual([...RLS_REQUIRED_TABLES].sort(), [...expectedTables].sort());
+test("production hardening covers every Prisma business table", () => {
+  assert.deepEqual(
+    [...RLS_REQUIRED_TABLES].sort(),
+    prismaModelNames().sort(),
+  );
   assert.deepEqual(DIRECT_AUTHENTICATED_TABLES, ["Membership"]);
-  assert.equal(API_OWNED_SECURITY_TABLES.includes("Membership" as never), false);
+  assert.equal(
+    (API_OWNED_SECURITY_TABLES as readonly string[]).includes("Membership"),
+    false,
+  );
 });
 
 test("security hardening enables RLS everywhere and revokes direct access from API-owned tables", () => {
