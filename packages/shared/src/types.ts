@@ -302,6 +302,7 @@ export interface AskSophiaSource {
 export interface AskSophiaRequest {
   question: string;
   knowledgeBaseIds?: string[];
+  documentIds?: string[];
 }
 
 export interface AskSophiaResponse {
