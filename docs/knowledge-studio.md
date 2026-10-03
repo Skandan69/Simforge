@@ -41,6 +41,23 @@ The Express API enforces these rules independently of the UI. Supabase Storage p
 2. The authenticated browser uploads directly to the private `knowledge-documents` bucket and reports byte progress.
 3. The API validates the file metadata and organization/knowledge-base storage path.
 4. Prisma creates the document and immutable version record.
-5. If metadata creation fails, the browser attempts to remove the uploaded object.
+5. The API queues the document for the Knowledge Processing Engine.
+6. When processing completes, active chunks become available to retrieval consumers such as Ask Sophia.
+7. If metadata creation fails, the browser attempts to remove the uploaded object.
 
 API-driven deletion uses the server-only Supabase service-role key to remove every version before deleting database metadata.
+
+## Ask Sophia grounding
+
+Processed documents can be queried through Ask Sophia. A user can search all active knowledge bases, selected knowledge bases, or open a processed document and choose **Ask Sophia** to lock retrieval to that exact document.
+
+ASK mode answers from retrieved active evidence only. If the document or knowledge base does not contain enough evidence, Sophia returns an insufficient-information response instead of inventing an answer. Citations are generated from machine-controlled document/version/location metadata.
+
+Supported upload formats are:
+
+- PDF with an extractable text layer
+- DOCX
+- PPTX text content
+- XLSX cell content
+
+Legacy Word `.doc` files are not accepted. Image-only/scanned PDFs require OCR before upload or a future OCR adapter; the current PDF extractor does not perform OCR.

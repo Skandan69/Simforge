@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { BookOpenCheck, Loader2, MessageCircleQuestion, ShieldCheck } from "lucide-react";
-import type { AskSophiaResponse, KnowledgeBaseSummary } from "@simforge/shared";
+import Link from "next/link";
+import { BookOpenCheck, FileText, Loader2, MessageCircleQuestion, ShieldCheck } from "lucide-react";
+import type { AskSophiaRequest, AskSophiaResponse, DocumentDetail, KnowledgeBaseSummary } from "@simforge/shared";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,10 +18,11 @@ interface ConversationItem {
   response: AskSophiaResponse;
 }
 
-export function AskSophiaView() {
+export function AskSophiaView({ initialDocumentId }: { initialDocumentId?: string }) {
   const [question, setQuestion] = useState("");
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseSummary[]>([]);
   const [selectedKnowledgeBaseIds, setSelectedKnowledgeBaseIds] = useState<string[]>([]);
+  const [scopedDocument, setScopedDocument] = useState<{ id: string; fileName: string; knowledgeBaseName: string }>();
   const [conversation, setConversation] = useState<ConversationItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
@@ -30,6 +32,31 @@ export function AskSophiaView() {
       .then(setKnowledgeBases)
       .catch(() => setKnowledgeBases([]));
   }, []);
+
+  useEffect(() => {
+    if (!initialDocumentId) return;
+    let active = true;
+    void apiFetch<DocumentDetail>(`/api/documents/${initialDocumentId}`)
+      .then((document) => {
+        if (!active) return;
+        if (document.status !== "Ready" || document.processing.status !== "Completed") {
+          setError("This document is not ready for Ask Sophia yet. Wait for processing to complete, then try again.");
+          return;
+        }
+        setScopedDocument({
+          id: document.id,
+          fileName: document.fileName,
+          knowledgeBaseName: document.knowledgeBase.name,
+        });
+      })
+      .catch((caught: unknown) => {
+        if (!active) return;
+        setError(caught instanceof Error ? caught.message : "Unable to load the selected document scope.");
+      });
+    return () => {
+      active = false;
+    };
+  }, [initialDocumentId]);
 
   const scopedNames = useMemo(() => knowledgeBases.filter((base) => selectedKnowledgeBaseIds.includes(base.id)).map((base) => base.name), [knowledgeBases, selectedKnowledgeBaseIds]);
 
@@ -43,9 +70,14 @@ export function AskSophiaView() {
     setLoading(true);
     setError(undefined);
     try {
+      const input: AskSophiaRequest = {
+        question: value,
+        knowledgeBaseIds: scopedDocument ? undefined : selectedKnowledgeBaseIds.length ? selectedKnowledgeBaseIds : undefined,
+        documentIds: scopedDocument ? [scopedDocument.id] : undefined,
+      };
       const response = await apiFetch<AskSophiaResponse>("/api/sophia/ask", {
         method: "POST",
-        body: JSON.stringify({ question: value, knowledgeBaseIds: selectedKnowledgeBaseIds.length ? selectedKnowledgeBaseIds : undefined }),
+        body: JSON.stringify(input),
       });
       setConversation((current) => [{ id: crypto.randomUUID(), question: value, response }, ...current]);
       setQuestion("");
@@ -62,10 +94,24 @@ export function AskSophiaView() {
     <Card className="border-primary/20">
       <CardHeader>
         <CardTitle className="flex items-center gap-2"><MessageCircleQuestion className="size-5 text-primary" />Ask company knowledge</CardTitle>
-        <CardDescription>This is not a separate chatbot. It is Sophia operating in ASK mode over your governed Knowledge Studio content. Each question is answered independently, so include the policy, customer, or scenario context Sophia should use.</CardDescription>
+        <CardDescription>This is not a separate chatbot. It is Sophia operating in ASK mode over your governed Knowledge Studio content. You can search all active knowledge, selected knowledge bases, or lock Sophia to one uploaded document. Each question is answered independently, so include the policy, customer, or scenario context Sophia should use.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
-        {knowledgeBases.length > 0 && <div className="space-y-2">
+        {scopedDocument ? <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-start gap-3">
+              <FileText className="mt-0.5 size-5 shrink-0 text-primary" />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">Document scope</p>
+                <p className="truncate text-sm">{scopedDocument.fileName}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{scopedDocument.knowledgeBaseName} · Sophia will retrieve evidence only from this document.</p>
+              </div>
+            </div>
+            <Button asChild type="button" variant="outline" size="sm">
+              <Link href="/ask-sophia">Search broader knowledge</Link>
+            </Button>
+          </div>
+        </div> : knowledgeBases.length > 0 && <div className="space-y-2">
           <p className="text-sm font-medium">Knowledge scope</p>
           <div className="flex flex-wrap gap-2">
             {knowledgeBases.map((base) => <Button key={base.id} type="button" variant={selectedKnowledgeBaseIds.includes(base.id) ? "default" : "outline"} size="sm" onClick={() => toggleScope(base.id)}>{base.name}</Button>)}
@@ -73,7 +119,7 @@ export function AskSophiaView() {
           <p className="text-xs text-muted-foreground">{scopedNames.length ? `Searching: ${scopedNames.join(", ")}` : "Searching all active knowledge bases."}</p>
         </div>}
         <Textarea value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Example: For a refund request after the return window, what exception allows a goodwill credit and what approval is required?" rows={4} aria-label="Ask Sophia a question" />
-        <p className="text-xs leading-5 text-muted-foreground">Tip: ASK mode is stateless. For follow-up questions, restate the key context so Sophia can retrieve the right evidence.</p>
+        <p className="text-xs leading-5 text-muted-foreground">{scopedDocument ? "Tip: this question is locked to the selected document. ASK mode is stateless, so restate key context in follow-up questions." : "Tip: ASK mode is stateless. For follow-up questions, restate the key context so Sophia can retrieve the right evidence."}</p>
         {error && <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
         <div className="flex justify-end">
           <Button onClick={() => void ask()} disabled={loading || !question.trim()}>{loading && <Loader2 className="animate-spin" />}Ask Sophia</Button>

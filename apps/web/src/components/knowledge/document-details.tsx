@@ -10,6 +10,7 @@ import {
   FileText,
   History,
   Loader2,
+  MessageCircleQuestion,
   Pencil,
   Replace,
   Save,
@@ -256,6 +257,14 @@ export function DocumentDetails({ id }: { id: string }) {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
+            {document.status === "Ready" && document.processing.status === "Completed" && (
+              <Button asChild>
+                <Link href={`/ask-sophia?documentId=${document.id}`}>
+                  <MessageCircleQuestion />
+                  Ask Sophia
+                </Link>
+              </Button>
+            )}
             <Button
               variant="outline"
               onClick={() =>
