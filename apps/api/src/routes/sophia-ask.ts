@@ -45,6 +45,7 @@ sophiaAskRouter.post("/ask", async (request, response) => {
         id: { in: uniqueDocumentIds },
         status: "Ready",
         knowledgeBase: { organizationId: workspace.organizationId, status: "Active" },
+        knowledgeSource: { is: { status: "Completed" } },
       },
     })));
     if (readyCount !== uniqueDocumentIds.length) throw new HttpError("One or more documents are unavailable for Ask Sophia", 404, "DOCUMENT_SCOPE_NOT_FOUND");
