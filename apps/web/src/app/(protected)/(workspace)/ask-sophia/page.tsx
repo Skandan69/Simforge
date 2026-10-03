@@ -6,5 +6,11 @@ export default async function AskSophiaPage({
   searchParams: Promise<{ documentId?: string }>;
 }) {
   const params = await searchParams;
-  return <AskSophiaView initialDocumentId={params.documentId} />;
+  const documentId = params.documentId;
+  return (
+    <AskSophiaView
+      key={documentId ?? "all-knowledge"}
+      initialDocumentId={documentId}
+    />
+  );
 }
