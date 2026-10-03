@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import type { AskSophiaResponse } from "@simforge/shared";
+import type { AskSophiaRequest, AskSophiaResponse } from "@simforge/shared";
 import { getAIProvider } from "../ai/provider.js";
 import { buildAskSophiaPrompt, deterministicAskAnswer, sanitizeEvidenceReferences } from "../ai/ask-prompt.js";
 import { requireAuth } from "../middleware/auth.js";
@@ -16,7 +16,7 @@ const askSchema = z.object({
   question: z.string().trim().min(1).max(4000),
   knowledgeBaseIds: z.array(z.string().uuid()).max(20).optional(),
   documentIds: z.array(z.string().uuid()).max(20).optional(),
-});
+}) satisfies z.ZodType<AskSophiaRequest>;
 
 export const sophiaAskRouter = Router();
 sophiaAskRouter.use(requireAuth, requireWorkspace);
