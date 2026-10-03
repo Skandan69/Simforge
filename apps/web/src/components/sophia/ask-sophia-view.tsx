@@ -34,10 +34,7 @@ export function AskSophiaView({ initialDocumentId }: { initialDocumentId?: strin
   }, []);
 
   useEffect(() => {
-    if (!initialDocumentId) {
-      setScopedDocument(undefined);
-      return;
-    }
+    if (!initialDocumentId) return;
     let active = true;
     void apiFetch<DocumentDetail>(`/api/documents/${initialDocumentId}`)
       .then((document) => {
