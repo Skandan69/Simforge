@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { BookOpenCheck, FileText, Loader2, MessageCircleQuestion, ShieldCheck } from "lucide-react";
-import type { AskSophiaResponse, DocumentDetail, KnowledgeBaseSummary } from "@simforge/shared";
+import type { AskSophiaRequest, AskSophiaResponse, DocumentDetail, KnowledgeBaseSummary } from "@simforge/shared";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -73,13 +73,14 @@ export function AskSophiaView({ initialDocumentId }: { initialDocumentId?: strin
     setLoading(true);
     setError(undefined);
     try {
+      const input: AskSophiaRequest = {
+        question: value,
+        knowledgeBaseIds: scopedDocument ? undefined : selectedKnowledgeBaseIds.length ? selectedKnowledgeBaseIds : undefined,
+        documentIds: scopedDocument ? [scopedDocument.id] : undefined,
+      };
       const response = await apiFetch<AskSophiaResponse>("/api/sophia/ask", {
         method: "POST",
-        body: JSON.stringify({
-          question: value,
-          knowledgeBaseIds: scopedDocument ? undefined : selectedKnowledgeBaseIds.length ? selectedKnowledgeBaseIds : undefined,
-          documentIds: scopedDocument ? [scopedDocument.id] : undefined,
-        }),
+        body: JSON.stringify(input),
       });
       setConversation((current) => [{ id: crypto.randomUUID(), question: value, response }, ...current]);
       setQuestion("");
