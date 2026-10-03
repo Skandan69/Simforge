@@ -94,7 +94,7 @@ export function AskSophiaView({ initialDocumentId }: { initialDocumentId?: strin
     <Card className="border-primary/20">
       <CardHeader>
         <CardTitle className="flex items-center gap-2"><MessageCircleQuestion className="size-5 text-primary" />Ask company knowledge</CardTitle>
-        <CardDescription>This is Sophia operating in ASK mode over your governed Knowledge Studio content. You can search all active knowledge, selected knowledge bases, or lock Sophia to one uploaded document. Each question is answered independently, so include the policy, customer, or scenario context Sophia should use.</CardDescription>
+        <CardDescription>This is not a separate chatbot. It is Sophia operating in ASK mode over your governed Knowledge Studio content. You can search all active knowledge, selected knowledge bases, or lock Sophia to one uploaded document. Each question is answered independently, so include the policy, customer, or scenario context Sophia should use.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
         {scopedDocument ? <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
