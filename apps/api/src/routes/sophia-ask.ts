@@ -15,6 +15,7 @@ import { insufficientEvidenceAskResponse } from "./sophia-ask-response.js";
 const askSchema = z.object({
   question: z.string().trim().min(1).max(4000),
   knowledgeBaseIds: z.array(z.string().uuid()).max(20).optional(),
+  documentIds: z.array(z.string().uuid()).max(20).optional(),
 });
 
 export const sophiaAskRouter = Router();
@@ -31,9 +32,22 @@ sophiaAskRouter.post("/ask", async (request, response) => {
 
   if (input.knowledgeBaseIds?.length) {
     const uniqueKnowledgeBaseIds = [...new Set(input.knowledgeBaseIds)];
-    const scopeCacheKey = `${workspace.organizationId}:${[...uniqueKnowledgeBaseIds].sort().join(",")}`;
+    const scopeCacheKey = `kb:${workspace.organizationId}:${[...uniqueKnowledgeBaseIds].sort().join(",")}`;
     const activeCount = askScopeCache.get(scopeCacheKey) ?? await timeRequestStage(request, "ask.scopeValidation", () => askScopeCache.getOrSet(scopeCacheKey, () => prisma.knowledgeBase.count({ where: { id: { in: uniqueKnowledgeBaseIds }, organizationId: workspace.organizationId, status: "Active" } })));
     if (activeCount !== uniqueKnowledgeBaseIds.length) throw new HttpError("One or more knowledge bases are unavailable", 404, "KNOWLEDGE_SCOPE_NOT_FOUND");
+  }
+
+  if (input.documentIds?.length) {
+    const uniqueDocumentIds = [...new Set(input.documentIds)];
+    const scopeCacheKey = `doc:${workspace.organizationId}:${[...uniqueDocumentIds].sort().join(",")}`;
+    const readyCount = askScopeCache.get(scopeCacheKey) ?? await timeRequestStage(request, "ask.documentScopeValidation", () => askScopeCache.getOrSet(scopeCacheKey, () => prisma.document.count({
+      where: {
+        id: { in: uniqueDocumentIds },
+        status: "Ready",
+        knowledgeBase: { organizationId: workspace.organizationId, status: "Active" },
+      },
+    })));
+    if (readyCount !== uniqueDocumentIds.length) throw new HttpError("One or more documents are unavailable for Ask Sophia", 404, "DOCUMENT_SCOPE_NOT_FOUND");
   }
 
   const retrieval = await timeRequestStage(request, "ask.retrieval", () => knowledgeRetrievalService.retrieve({
@@ -41,6 +55,7 @@ sophiaAskRouter.post("/ask", async (request, response) => {
     query: input.question,
     mode: "ASK",
     knowledgeBaseIds: input.knowledgeBaseIds,
+    documentIds: input.documentIds,
     debugTimings: includeDebugTimings,
   }));
 
